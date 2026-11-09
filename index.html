@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#000;color-scheme:dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Edge – Follow the trading rules you set</title>
+<meta name="description" content="Write down your trading edge, show Edge what your rules look like on a chart, and check every setup against them before you trade.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=Archivo:wdth,wght@100..125,400..900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --deep:#05231b; --glass:rgba(255,255,255,.04); --line:rgba(255,255,255,.09);
+  --text:#f4f6f5; --muted:#8c958f; --accent:#5ef088; --soft:#b6ffcd; --glow:rgba(40,210,120,.22);
+  --pass:#5be3a0; --fail:#ff7a8a; --maybe:#ffd36b;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:calc(72px + env(safe-area-inset-top,0px))}
+body{margin:0;background:radial-gradient(ellipse 80% 45% at 50% 0,var(--deep),var(--bg) 70%) no-repeat,var(--bg);color:var(--text);font-family:"Inter Tight",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--soft);outline-offset:3px;border-radius:8px}
+.wrap{width:min(1120px,100% - 40px);margin-inline:auto}
+h2{font-size:clamp(2rem,4.6vw,3.4rem);line-height:1.06;letter-spacing:-.045em;margin:0 0 14px;font-weight:400}
+h2 em{font-style:normal;color:var(--accent)}
+.sub{color:var(--muted);font-size:1.1rem;margin:0}
+.center{text-align:center}.center h2,.center .sub{margin-inline:auto;max-width:24em}
+section{padding:110px 0;position:relative}
+
+/* ticker */
+.ticker{overflow:hidden;padding:12px 0 8px;white-space:nowrap;mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.row{display:flex;width:max-content;gap:14px;animation:tick 70s linear infinite}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:#070a09;font-size:.74rem;color:var(--muted)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.chip b{color:var(--text);font-weight:500}
+.chip em{font-style:normal;padding:2px 8px;border-radius:999px;font-size:.68rem}
+.chip .pass{background:#0e2a1b;color:var(--pass)}.chip .fail{background:#2c0f15;color:var(--fail)}.chip .maybe{background:#2c250c;color:var(--maybe)}
+@keyframes tick{to{transform:translateX(-50%)}}
+
+/* nav */
+header{position:sticky;top:0;z-index:30;padding-top:env(safe-area-inset-top,0px);background:rgba(0,0,0,.6);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
+.brand{font-weight:600;font-size:1.25rem;letter-spacing:-.04em;text-decoration:none}
+nav ul{display:flex;gap:30px;list-style:none;margin:0;padding:0}
+nav a{text-decoration:none;color:var(--muted);font-size:.95rem}nav a:hover{color:var(--text)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:46px;padding:0 22px;border-radius:999px;font-weight:500;font-size:.98rem;text-decoration:none;border:1px solid var(--line);cursor:pointer;transition:transform .15s,background .15s;font-family:inherit;color:var(--text);background:transparent}
+.btn:hover{background:rgba(255,255,255,.07)}
+.btn-main{background:#e9f6ec;color:#04110a;padding:0 8px 0 22px;border-color:transparent}
+.btn-main::after{content:"→";display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--accent);color:#04110a}
+.btn-main:hover{background:#fff;transform:translateY(-2px)}
+
+/* hero: emerald scene */
+.hero{position:relative;padding:0;overflow:hidden;isolation:isolate;
+  background:radial-gradient(ellipse 60% 55% at 12% 100%,rgba(205,255,60,.30),transparent 62%),radial-gradient(ellipse 55% 65% at 88% 0,#0e9068 0,transparent 62%),linear-gradient(180deg,#03231b 0%,#05382a 58%,#000 100%)}
+.scene{position:relative;min-height:min(88vh,780px);display:grid;place-items:center;text-align:center;padding:80px 0 110px}
+.scene>*{position:relative}
+.scene .fx{position:absolute;pointer-events:none}
+.rings{inset:0;width:100%;height:100%}
+.rings circle{fill:none;stroke:rgba(190,255,215,.22);stroke-width:1.2}
+.rings .run{stroke:#dcff3c;stroke-width:3;stroke-linecap:round;stroke-dasharray:150 1923;filter:drop-shadow(0 0 8px #dcff3c);animation:run 11s linear infinite}
+.rings .run.b{animation-duration:15s;animation-direction:reverse;stroke:#9dffc8}
+@keyframes run{to{stroke-dashoffset:-2073}}
+.blob{border-radius:50%;filter:blur(50px);animation:drift 14s ease-in-out infinite alternate}
+.blob.l{width:420px;height:420px;left:-6%;bottom:-8%;background:rgba(205,255,60,.42)}
+.blob.t{width:360px;height:360px;right:6%;top:-14%;background:rgba(20,180,140,.55);animation-delay:-5s}
+@keyframes drift{to{transform:translate(40px,-30px) scale(1.12)}}
+.ribbon{inset:0;width:100%;height:100%}
+.ribbon .tube{fill:none;stroke-width:42;stroke-linecap:round;stroke-dasharray:1;animation:draw 2.4s cubic-bezier(.6,0,.2,1) .5s backwards;filter:drop-shadow(0 12px 18px rgba(0,0,0,.35))}
+.ribbon .tube.two{animation-delay:1s}
+@keyframes draw{from{stroke-dashoffset:1;opacity:0}8%{opacity:1}to{stroke-dashoffset:0;opacity:1}}
+.ribbon text{font-family:"Archivo",sans-serif;font-weight:800;font-size:17px;letter-spacing:.06em;fill:#f4ffc8}
+.glass{right:11%;top:20%;width:150px;height:150px;border-radius:30px;border:2px solid rgba(220,255,60,.75);background:linear-gradient(135deg,rgba(220,255,60,.16),rgba(220,255,60,0));box-shadow:0 0 34px rgba(220,255,60,.5),inset 0 0 34px rgba(220,255,60,.22);display:grid;place-items:center;transform:translate(calc(var(--mx,0)*-22px),calc(var(--my,0)*-14px)) rotate(18deg);animation:tilt 9s ease-in-out infinite alternate;transition:transform .3s}
+@keyframes tilt{from{rotate:0deg;translate:0 -8px}to{rotate:-14deg;translate:0 12px}}
+.flower{width:64px;height:64px;color:#ffc61a;filter:drop-shadow(0 0 14px #ffb300) drop-shadow(0 0 30px rgba(255,190,0,.6));animation:spin 14s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fly{left:0;top:0;width:34px;height:34px;offset-path:path('M-40 560 C 260 80 700 700 1500 120');offset-rotate:0deg;animation:fly 16s linear infinite}
+.fly .flower{width:34px;height:34px;color:#d9ff3a}
+@keyframes fly{from{offset-distance:0%}to{offset-distance:100%}}
+.kick{margin:0 0 18px;font-size:clamp(1.3rem,2.6vw,2rem);font-weight:300;letter-spacing:-.03em;color:#eafff2;display:flex;gap:.35em;justify-content:center}
+.swap{display:inline-grid;text-align:left}
+.swap span{grid-area:1/1;opacity:0;animation:sw 9s infinite}
+.swap span::first-letter{color:#dcff3c;font-weight:800}
+.swap span:nth-child(2){animation-delay:3s}.swap span:nth-child(3){animation-delay:6s}
+.swap span:first-child{opacity:1}
+@keyframes sw{0%{opacity:0;transform:translateY(.5em);filter:blur(6px)}5%,30%{opacity:1;transform:none;filter:none}35%,100%{opacity:0;transform:translateY(-.5em);filter:blur(6px)}}
+.word{margin:0;font-family:"Archivo",sans-serif;font-weight:800;font-stretch:112%;font-variation-settings:"wdth" 112;line-height:.98;letter-spacing:-.035em;font-size:clamp(2rem,8.6vw,7.4rem);text-transform:none}
+.word .echo{display:block;height:.74em;line-height:.74em;white-space:nowrap;color:rgba(228,255,120,calc(.34 - var(--k)*.08));transform:translate(calc(var(--mx,0)*var(--k)*16px),calc(var(--my,0)*var(--k)*6px));transition:transform .35s ease-out;animation:echoIn 1.4s cubic-bezier(.2,.7,.2,1) calc(1.1s + var(--k)*.12s) backwards}
+.word .main{display:block;position:relative;color:#dcff3c;text-shadow:0 0 60px rgba(220,255,60,.35);animation:wipe 1.1s cubic-bezier(.7,0,.2,1) .3s backwards}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes echoIn{from{opacity:0;translate:0 24px}to{opacity:1;translate:0 0}}
+.scene .lead{margin:26px auto 28px;max-width:30em;font-size:clamp(1.05rem,1.8vw,1.3rem);line-height:1.4;color:#d6eadd}
+.cta-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.scene .note{font-size:.85rem;color:#9fc3b0;margin:18px 0 0}
+.scene .btn:not(.btn-main){border-color:rgba(220,255,60,.35)}
+
+/* what it is */
+.plain{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.plain p{color:var(--muted);font-size:1.12rem;margin:0 0 16px;max-width:30em}
+.plain p strong{color:var(--text);font-weight:500}
+.panel{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 40px 90px -40px var(--glow)}
+.panel::before{content:"";position:absolute;left:12%;right:12%;top:-1px;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent)}
+.panel-head{display:flex;justify-content:space-between;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--line);font-size:.9rem;color:var(--muted)}
+.panel-head b{color:var(--text);font-weight:500}
+.rule{display:grid;grid-template-columns:auto 1fr;gap:14px;padding:15px 0;border-bottom:1px solid var(--line)}
+.rule:last-of-type{border-bottom:0}
+.tag{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:999px;font-size:.8rem;font-weight:500;border:1px solid currentColor;white-space:nowrap}
+.pass{color:var(--pass)}.fail{color:var(--fail)}.maybe{color:var(--maybe)}
+.rule h3{margin:0 0 2px;font-size:1rem;font-weight:500;color:var(--text)}.rule p{margin:0;font-size:.9rem;color:var(--muted)}
+.panel-foot{display:flex;gap:10px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--line)}
+.panel-foot span{font-size:.85rem;padding:8px 16px;border:1px solid var(--line);border-radius:999px}
+
+/* how: stage */
+.how .center{margin-bottom:56px}
+.frame{position:relative;height:440px;border:1px solid var(--line);background:radial-gradient(ellipse 60% 70% at 50% 100%,rgba(20,90,55,.35),transparent 70%),#050807;overflow:hidden;border-radius:6px}
+.frame::before,.frame::after,.frame i::before,.frame i::after{content:"";position:absolute;width:18px;height:18px;border:1px solid var(--accent);opacity:.8}
+.frame::before{left:-1px;top:-1px;border-right:0;border-bottom:0}.frame::after{right:-1px;top:-1px;border-left:0;border-bottom:0}
+.frame i::before{left:-1px;bottom:-1px;border-right:0;border-top:0}.frame i::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.swoosh{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.swoosh path{fill:none;stroke:url(#sg);stroke-width:2.5;filter:drop-shadow(0 0 8px rgba(94,240,136,.6));animation:sway 9s ease-in-out infinite alternate}
+.swoosh path:nth-child(2){animation-delay:-3s;opacity:.55}.swoosh path:nth-child(3){animation-delay:-6s;opacity:.35}
+@keyframes sway{from{transform:translateX(-30px)}to{transform:translateX(30px)}}
+.cards{position:absolute;left:min(14%,120px);top:50%;width:min(400px,78%);height:260px;margin-top:-120px}
+.card{position:absolute;inset:0;padding:20px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(160deg,#16201b,#0a0f0d);box-shadow:0 20px 50px -20px #000;transition:transform .7s cubic-bezier(.2,.7,.2,1),opacity .7s;
+  transform:translate(calc(var(--p)*-38px),calc(var(--p)*-24px)) scale(calc(1 - var(--p)*.05));opacity:calc(1 - var(--p)*.3);z-index:calc(10 - var(--p))}
+.card[data-hide]{opacity:0}
+.card h4{margin:0 0 12px;font-weight:500;font-size:1.05rem}
+.card small{display:block;color:var(--muted);font-size:.82rem;margin-bottom:10px}
+.li{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
+.li s{text-decoration:none;margin-left:auto}
+.bar2{height:8px;border-radius:99px;background:#1a2520;overflow:hidden;margin:10px 0 14px}.bar2 b{display:block;height:100%;width:80%;background:linear-gradient(90deg,#2fbf68,var(--accent))}
+.thumbs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.thumbs div{border:1px solid var(--line);border-radius:10px;padding:10px;font-size:.8rem;color:var(--muted)}
+.thumbs svg{display:block;width:100%;height:56px;margin-bottom:6px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:26px}
+.step{all:unset;display:block;cursor:pointer;padding-top:16px;position:relative;border-top:1px solid var(--line);color:var(--muted)}
+.step::before{content:"";position:absolute;left:0;top:-1px;height:1px;width:0;background:var(--accent)}
+.step[aria-selected="true"]{color:var(--text)}
+.step[aria-selected="true"]::before{width:100%;transition:width 5s linear}
+.step.done::before{width:100%;transition:none}
+.step small{display:block;font-size:.78rem;color:var(--accent);margin-bottom:6px}
+.step b{display:block;font-weight:500;font-size:1.1rem;margin-bottom:6px;letter-spacing:-.02em}
+.step span{font-size:.92rem;line-height:1.45;display:block}
+.step:focus-visible{outline:3px solid var(--soft);outline-offset:6px}
+
+/* why */
+.cards4{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:56px}
+.feat{position:relative;min-height:230px;padding:30px;border-radius:14px;border:1px solid var(--line);background:radial-gradient(circle at 15% 0,rgba(94,240,136,.1),transparent 55%),linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.tile{position:absolute;left:30px;top:28px;width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:1.5rem;color:#04110a;background:linear-gradient(145deg,var(--soft),var(--accent));box-shadow:0 0 40px 6px var(--glow)}
+.feat h3{margin:0 0 6px;font-size:1.3rem;font-weight:500;letter-spacing:-.025em}.feat p{margin:0;color:var(--muted);max-width:26em}
+.not{margin:40px auto 0;text-align:center;color:var(--muted);max-width:40em;font-size:.98rem}
+
+/* marquee */
+.big{padding:0;height:min(520px,60vw);overflow:hidden;display:flex;align-items:center}
+.discs{position:absolute;inset:0;pointer-events:none}
+.disc{position:absolute;border-radius:50%;background:radial-gradient(circle at 28% 24%,#f2fff7 0,#7dffb4 22%,#2fcf7a 48%,#0a5a38 78%,#04281a 100%);box-shadow:inset 0 0 40px rgba(255,255,255,.35),0 0 80px rgba(60,240,130,.25);opacity:.9;animation:bob 9s ease-in-out infinite alternate}
+.disc:nth-child(1){width:46%;aspect-ratio:1;left:2%;top:-20%;transform:rotate(-20deg)}
+.disc:nth-child(2){width:40%;aspect-ratio:1;left:34%;top:4%;animation-delay:-3s;opacity:.7;background:radial-gradient(circle at 70% 30%,#fff 0,#9affc6 20%,#2fcf7a 50%,#06281b 100%)}
+.disc:nth-child(3){width:34%;aspect-ratio:1;left:62%;top:-14%;animation-delay:-6s}
+@keyframes bob{from{translate:0 -14px;rotate:0deg}to{translate:0 14px;rotate:14deg}}
+.mq{position:relative;display:flex;width:max-content;animation:tick 28s linear infinite;font-size:clamp(5rem,17vw,14rem);font-weight:600;letter-spacing:-.07em;line-height:1;color:#fff;white-space:nowrap}
+.mq span{padding-right:.35em}
+
+/* faq */
+.faq{max-width:760px;margin:56px auto 0}
+details{border-top:1px solid var(--line)}details:last-child{border-bottom:1px solid var(--line)}
+summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;gap:20px;padding:22px 0;font-size:1.12rem;letter-spacing:-.02em}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--accent);font-size:1.5rem;line-height:1;transition:transform .25s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{margin:0 0 22px;color:var(--muted);max-width:36em}
+
+/* finale: planet arc */
+.finale{text-align:center;overflow:hidden;padding:150px 0 130px}
+.stars{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1.5px 1.5px at 12% 20%,#fff,transparent),radial-gradient(1px 1px at 28% 60%,#cfe,transparent),radial-gradient(1.5px 1.5px at 44% 14%,#fff,transparent),radial-gradient(1px 1px at 61% 40%,#fff,transparent),radial-gradient(1.5px 1.5px at 78% 18%,#cfe,transparent),radial-gradient(1px 1px at 90% 52%,#fff,transparent),radial-gradient(1px 1px at 8% 70%,#fff,transparent),radial-gradient(1.5px 1.5px at 70% 66%,#fff,transparent);animation:twinkle 5s ease-in-out infinite alternate}
+@keyframes twinkle{from{opacity:.35}to{opacity:1}}
+.streak{position:absolute;width:90px;height:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#fff);transform:rotate(-38deg);opacity:0;animation:shoot 6s ease-in infinite}
+.streak:nth-of-type(2){animation-delay:3s;top:18%;left:68%}.streak:nth-of-type(1){top:12%;left:24%}
+@keyframes shoot{0%{opacity:0;translate:0 0}6%{opacity:1}22%{opacity:0;translate:-140px 110px}100%{opacity:0;translate:-140px 110px}}
+.planet{position:absolute;left:50%;top:300px;width:1700px;height:1700px;max-width:260vw;transform:translateX(-50%);border-radius:50%;background:#000;box-shadow:0 -2px 3px 0 var(--soft),0 -14px 40px 0 rgba(94,240,136,.55),0 -50px 160px 0 var(--glow);pointer-events:none}
+.finale .wrap{position:relative}
+.finale h2{font-size:clamp(2.2rem,6vw,4.8rem);max-width:14em}
+.finale .sub{margin:0 auto 34px;max-width:30em}
+
+footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);font-size:.9rem}
+.cols{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px;margin-bottom:40px}
+.cols h5{margin:0 0 14px;font-size:1.05rem;font-weight:400;color:var(--text);letter-spacing:-.02em}
+.cols ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}.cols a{text-decoration:none}.cols a:hover{color:var(--text)}
+.legal{border-top:1px solid var(--line);padding-top:20px}
+
+@media (max-width:900px){
+  nav{display:none}
+  .glass{width:96px;height:96px;right:5%;top:9%;border-radius:20px}.flower{width:42px;height:42px}.scene{padding:70px 0 100px}
+  .plain,.cards4{grid-template-columns:1fr;gap:32px}
+  .steps{grid-template-columns:1fr 1fr}.cols{grid-template-columns:1fr 1fr}
+  section{padding:76px 0}.frame{height:400px}
+}
+@media (max-width:540px){.steps{grid-template-columns:1fr}.rule{grid-template-columns:1fr}.bar .btn{padding:0 8px 0 16px}.cards{left:6%}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<div class="ticker" aria-hidden="true"><div class="row" id="row"></div></div>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top">Edge</a>
+    <nav aria-label="Main"><ul>
+      <li><a href="#what">What it is</a></li><li><a href="#how">How it works</a></li><li><a href="#why">Why Edge</a></li><li><a href="#faq">FAQ</a></li>
+    </ul></nav>
+    <a class="btn btn-main" href="#start">Get early access</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" id="hero" aria-labelledby="h1">
+    <div class="scene">
+      <div class="fx blob l" aria-hidden="true"></div><div class="fx blob t" aria-hidden="true"></div>
+      <svg class="fx rings" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <circle cx="380" cy="350" r="330"/><circle cx="820" cy="350" r="330"/><circle cx="600" cy="-30" r="260"/><circle cx="600" cy="730" r="260"/>
+        <circle class="run" cx="380" cy="350" r="330"/><circle class="run b" cx="820" cy="350" r="330"/>
+      </svg>
+      <svg class="fx ribbon" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="rg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#073326"/><stop offset=".55" stop-color="#1f8a52"/><stop offset="1" stop-color="#dcff3c"/></linearGradient>
+          <linearGradient id="rg2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#073326"/><stop offset=".5" stop-color="#1f8a52"/><stop offset="1" stop-color="#dcff3c"/></linearGradient>
+          <path id="rp1" d="M-60 650 C 50 730 140 490 245 512 S 320 640 395 605"/>
+          <path id="rp2" d="M1260 60 C 1060 -40 950 190 1050 250 S 1180 250 1260 400"/>
+        </defs>
+        <use href="#rp1" class="tube" stroke="url(#rg)" pathLength="1"/>
+        <text dy="6"><textPath href="#rp1" startOffset="0%">checked · followed · reviewed · checked · followed · reviewed · checked · followed · reviewed<animate attributeName="startOffset" from="0%" to="-30%" dur="30s" repeatCount="indefinite"/></textPath></text>
+        <use href="#rp2" class="tube two" stroke="url(#rg2)" pathLength="1"/>
+      </svg>
+      <div class="fx fly" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
+      <div class="fx glass" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
+
+      <div class="wrap">
+        <p class="kick"><span>Your</span><span class="swap" aria-hidden="true"><span>rules</span><span>setup</span><span>edge</span></span></p>
+        <h1 class="word" id="h1" aria-label="Trade your plan">
+          <span class="echo" style="--k:3" aria-hidden="true">Trade your plan</span>
+          <span class="echo" style="--k:2" aria-hidden="true">Trade your plan</span>
+          <span class="echo" style="--k:1" aria-hidden="true">Trade your plan</span>
+          <span class="main">Trade your plan</span>
+        </h1>
+        <p class="lead">Stop breaking your own rules. Check every setup against your edge before you trade.</p>
+        <div class="cta-row">
+          <a class="btn btn-main" href="#start">Get early access</a>
+          <a class="btn" href="#how">See how it works</a>
+        </div>
+        <p class="note">No signals. No predictions. You make every trade.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="what" aria-labelledby="what-h">
+    <div class="wrap plain">
+      <div>
+        <h2 id="what-h">A second pair of eyes that <em>knows your rules.</em></h2>
+        <p>Most traders know their strategy. The hard part is following it every time, when a setup looks tempting and the rules feel optional.</p>
+        <p><strong>Edge turns your strategy into a checklist you approve.</strong> You show it examples from your own charts, so it learns what “a clean pullback” means to you, not to a textbook.</p>
+        <p>Before a trade, it reviews the chart rule by rule and shows its evidence. If you go ahead anyway, that’s recorded too, so you can learn from it later.</p>
+      </div>
+      <div class="panel" role="img" aria-label="Example review: one rule passed, one failed, one inconclusive">
+        <div class="panel-head"><span><b>EUR/USD</b> · Long setup review</span><span>Checklist v3</span></div>
+        <div class="rule"><span class="tag pass">✓ Pass</span><div><h3>Higher timeframe trend is up</h3><p>Series of higher highs and lows on the 4H chart.</p></div></div>
+        <div class="rule"><span class="tag fail">✕ Fail</span><div><h3>No entry inside news window</h3><p>Entry is 20 minutes before a rate decision.</p></div></div>
+        <div class="rule"><span class="tag maybe">? Inconclusive</span><div><h3>Confirmation candle closed</h3><p>Switch to the 15m chart so I can check.</p></div></div>
+        <div class="panel-foot"><span>Ask for another review</span><span>Override and record</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how" id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="center">
+        <h2 id="how-h">How does Edge <em>work?</em></h2>
+        <p class="sub">Your path from written rules to a clear answer.</p>
+      </div>
+      <div class="frame" aria-label="Preview of the four steps">
+        <svg class="swoosh" viewBox="0 0 1000 440" preserveAspectRatio="none" aria-hidden="true">
+          <defs><linearGradient id="sg" x1="0" x2="1"><stop offset="0" stop-color="#5ef088" stop-opacity="0"/><stop offset=".5" stop-color="#5ef088"/><stop offset="1" stop-color="#b6ffcd" stop-opacity="0"/></linearGradient></defs>
+          <path d="M-50 380 C200 150 380 420 600 260 S900 120 1050 210"/><path d="M-50 410 C250 250 450 440 680 300 S920 220 1050 300"/><path d="M-50 340 C150 260 420 300 640 220 S900 80 1050 130"/>
+        </svg>
+        <div class="cards" id="cards">
+          <div class="card"><h4>Your checklist</h4><small>Version 3 · approved by you</small>
+            <div class="li">Higher timeframe trend is up</div><div class="li">No entry inside news window</div><div class="li">Stop sits below swing low</div></div>
+          <div class="card"><h4>Visual examples</h4><small>Attached to each rule</small>
+            <div class="thumbs"><div><svg viewBox="0 0 100 56"><polyline fill="none" stroke="#5ef088" stroke-width="2" points="2,50 25,38 40,44 62,22 80,28 98,6"/></svg>Valid pullback</div><div><svg viewBox="0 0 100 56"><polyline fill="none" stroke="#ff7a8a" stroke-width="2" points="2,12 25,20 45,16 65,36 82,30 98,50"/></svg>Not valid</div></div></div>
+          <div class="card"><h4>Trade review</h4><small>EUR/USD · Long</small>
+            <div class="li">Trend is up <s class="pass">✓ Pass</s></div><div class="li">News window <s class="fail">✕ Fail</s></div><div class="li">Confirmation <s class="maybe">? Inconclusive</s></div></div>
+          <div class="card"><h4>Your journal</h4><small>This week</small>
+            <div style="font-size:2rem;letter-spacing:-.04em">8 of 10 <span style="font-size:1rem;color:var(--muted)">rules followed</span></div><div class="bar2"><b></b></div><div class="li">1 override recorded <s class="maybe">Reviewed</s></div></div>
+        </div>
+        <i aria-hidden="true"></i>
+      </div>
+      <div class="steps" role="tablist" aria-label="Steps">
+        <button class="step" role="tab" aria-selected="true"><small>Step 1</small><b>Describe your edge</b><span>Type or say your strategy. Edge turns it into a checklist and asks about anything vague. You approve it.</span></button>
+        <button class="step" role="tab" aria-selected="false"><small>Step 2</small><b>Show your examples</b><span>Add chart screenshots to each rule and say why they’re valid or not.</span></button>
+        <button class="step" role="tab" aria-selected="false"><small>Step 3</small><b>Review before you trade</b><span>Show Edge the charts it asks for. Get a Pass, Fail or Inconclusive for each rule.</span></button>
+        <button class="step" role="tab" aria-selected="false"><small>Step 4</small><b>Learn from every trade</b><span>Your journal scores how closely you followed your rules, separate from profit or loss.</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="why" aria-labelledby="why-h">
+    <div class="wrap">
+      <div class="center"><h2 id="why-h">Why traders choose <em>Edge</em></h2><p class="sub">It helps you follow your plan. It never decides for you.</p></div>
+      <div class="cards4">
+        <div class="feat"><div class="tile" aria-hidden="true">✓</div><h3>Built from your rules</h3><p>Your strategy, in your words. Nothing becomes a rule until you approve it.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true">◎</div><h3>Evidence for every result</h3><p>Each Pass or Fail shows what Edge saw on the chart and why.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true">?</div><h3>Honest about doubt</h3><p>If the chart doesn’t show enough, Edge says Inconclusive and asks for another view.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true">↺</div><h3>Every override recorded</h3><p>Trade against a Fail if you choose. Edge logs it in your journal, without judgment.</p></div>
+      </div>
+      <p class="not">Edge gives no signals, predicts no markets, and places no trades. It is decision support, not financial advice.</p>
+    </div>
+  </section>
+
+  <section class="big" aria-hidden="true">
+    <div class="discs"><div class="disc"></div><div class="disc"></div><div class="disc"></div></div>
+    <div class="mq"><span>Define it. Check it. Follow it.</span><span>Define it. Check it. Follow it.</span></div>
+  </section>
+
+  <section id="faq" aria-labelledby="faq-h">
+    <div class="wrap">
+      <div class="center"><h2 id="faq-h">Questions, <em>answered.</em></h2></div>
+      <div class="faq">
+        <details><summary>What is Edge?</summary><p>A tool that turns your trading strategy into a checklist and reviews each setup against it before you trade.</p></details>
+        <details><summary>Does Edge tell me what to trade?</summary><p>No. It gives no signals or predictions. You choose every trade.</p></details>
+        <details><summary>What if the chart isn’t clear?</summary><p>Edge marks the rule Inconclusive and asks you for another timeframe or view.</p></details>
+        <details><summary>Can I trade against a Fail?</summary><p>Yes. Edge records the override and shows it in your journal.</p></details>
+        <details><summary>Does Edge place trades or connect to my broker?</summary><p>Not at launch. You record trades yourself. Connections may come later.</p></details>
+        <details><summary>Is this financial advice?</summary><p>No. Edge is decision support. Trading involves risk.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="finale" id="start" aria-labelledby="f-h">
+    <div class="stars" aria-hidden="true"></div><i class="streak" aria-hidden="true"></i><i class="streak" aria-hidden="true"></i>
+    <div class="planet" aria-hidden="true"></div>
+    <div class="wrap">
+      <h2 id="f-h">Trade the plan you made <em>when you were calm.</em></h2>
+      <p class="sub">Join the early access list and be first to try Edge.</p>
+      <a class="btn btn-main" href="mailto:hello@example.com?subject=Early%20access">Get early access</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div><a class="brand" href="#top" style="color:var(--text)">Edge</a><p style="max-width:20em">Define, follow and review your own trading edge.</p></div>
+      <div><h5>Product</h5><ul><li><a href="#what">What it is</a></li><li><a href="#how">How it works</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+      <div><h5>Early access</h5><ul><li><a href="#start">Join the list</a></li><li><a href="mailto:hello@example.com">Contact</a></li></ul></div>
+      <div><h5>Legal</h5><ul><li><a href="#">Risk notice</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+    </div>
+    <div class="legal">© 2026 Edge. Decision support only. Not financial advice. Trading involves risk.</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var still=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  /* ticker chips */
+  var data=[['EUR/USD','Pass','pass'],['GBP/JPY','Fail','fail'],['XAU/USD','Pass','pass'],['NAS100','Inconclusive','maybe'],['USD/CAD','Pass','pass'],['US30','Fail','fail'],['AUD/USD','Pass','pass'],['BTC/USD','Inconclusive','maybe']], h='';
+  for(var r=0;r<4;r++) data.forEach(function(d){h+='<span class="chip"><i></i><b>'+d[0]+'</b><em class="'+d[2]+'">'+d[1]+'</em></span>'});
+  document.getElementById('row').innerHTML=h;
+
+  /* hero: pointer parallax */
+  var hero=document.getElementById('hero');
+  if(!still&&hero){hero.addEventListener('pointermove',function(e){var r=hero.getBoundingClientRect();
+    hero.style.setProperty('--mx',((e.clientX-r.left)/r.width*2-1).toFixed(3));hero.style.setProperty('--my',((e.clientY-r.top)/r.height*2-1).toFixed(3))})}
+
+  /* how it works: stacked cards + steps */
+  var cards=[].slice.call(document.querySelectorAll('.card')), steps=[].slice.call(document.querySelectorAll('.step')), cur=0, timer;
+  function show(n){cur=n;
+    cards.forEach(function(c,i){var p=(i-n+cards.length)%cards.length;c.style.setProperty('--p',p);if(p>2)c.setAttribute('data-hide','');else c.removeAttribute('data-hide')});
+    steps.forEach(function(s,i){s.setAttribute('aria-selected',i===n);s.classList.toggle('done',i<n)});
+  }
+  function start(){clearInterval(timer);if(!still)timer=setInterval(function(){show((cur+1)%steps.length)},5000)}
+  steps.forEach(function(s,i){s.addEventListener('click',function(){show(i);start()})});
+  show(0);start();
+})();
+</script>
+</body>
+</html>
