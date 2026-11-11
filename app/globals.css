@@ -1,0 +1,251 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #000000;
+  --color-deep: #05231b;
+  --color-surface: #0a0f0d;
+  --color-panel: #101613;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --color-ink: #f4f6f5;
+  --color-muted: #8c958f;
+  --color-accent: #5ef088;
+  --color-soft: #b6ffcd;
+  --color-pass: #5be3a0;
+  --color-fail: #ff7a8a;
+  --color-maybe: #ffd36b;
+  /* semantic surfaces (dark values; light theme overrides below) */
+  --color-err-bg: #2c0f15;
+  --color-warn-bg: #2c250c;
+  --color-track: #1a2520;
+  --color-hr: rgba(255, 255, 255, 0.12);
+  --color-header: rgba(0, 0, 0, 0.6);
+  --color-card-a: #16201b;
+  --color-card-b: #0a0f0d;
+  --color-input-bg: #0a0f0d;
+  --color-btn-main-bg: #e9f6ec;
+  --color-btn-main-fg: #04110a;
+  --color-btn-main-hover: #ffffff;
+  --color-pass-bg: #0e2a1b;
+  --color-glow: rgba(40, 210, 120, 0.22);
+  --font-sans: "Inter Tight", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* --- light theme: flip the tokens (applied via data-theme on <html>) --- */
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f6f8f7;
+  --color-deep: #e7f6ee;
+  --color-surface: #ffffff;
+  --color-panel: #eef2f0;
+  --color-line: rgba(0, 0, 0, 0.14);
+  --color-ink: #101613;
+  --color-muted: #57605b;
+  --color-accent: #0d7a3f;
+  --color-soft: #0a5c2c;
+  --color-pass: #0d8a55;
+  --color-fail: #cf3b4e;
+  --color-maybe: #8f6400;
+  --color-err-bg: #fdecee;
+  --color-warn-bg: #fdf5dd;
+  --color-track: #e7ecea;
+  --color-hr: rgba(0, 0, 0, 0.14);
+  --color-header: rgba(246, 248, 247, 0.75);
+  --color-card-a: #ffffff;
+  --color-card-b: #f2f6f4;
+  --color-input-bg: #ffffff;
+  --color-btn-main-bg: #101613;
+  --color-btn-main-fg: #f4f6f5;
+  --color-btn-main-hover: #2a3330;
+  --color-pass-bg: #e3f7ea;
+  --color-glow: rgba(13, 122, 63, 0.14);
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-bg);
+}
+
+body {
+  background:
+    radial-gradient(ellipse 80% 45% at 50% 0, var(--color-deep), var(--color-bg) 70%) no-repeat,
+    var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* page titles follow the landing page's display headings */
+h1 {
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+
+/* accessibility: honor reduced motion (settings toggle + OS preference) */
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-soft);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* shared primitives matching the landing page */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.98rem;
+  text-decoration: none;
+  border: 1px solid var(--color-line);
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+  font-family: inherit;
+  color: var(--color-ink);
+  background: transparent;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-sm {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 0.9rem;
+  gap: 8px;
+}
+.btn-main {
+  background: var(--color-btn-main-bg);
+  color: var(--color-btn-main-fg);
+  border-color: transparent;
+  padding: 0 8px 0 22px;
+}
+/* landing-page signature: arrow in an accent circle */
+.btn-main::after {
+  content: "→";
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #5ef088;
+  color: #04110a;
+}
+.btn-main:hover {
+  background: var(--color-btn-main-hover);
+  transform: translateY(-2px);
+}
+.btn-danger {
+  border-color: color-mix(in srgb, var(--color-fail) 45%, transparent);
+  color: var(--color-fail);
+}
+
+.input,
+textarea.input {
+  width: 100%;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 11px 14px;
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 0.97rem;
+}
+.input:focus {
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  outline: none;
+}
+.input::placeholder {
+  color: #5f6a64;
+}
+html[data-theme="light"] .input::placeholder {
+  color: #8a938e;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.tag-pass {
+  color: var(--color-pass);
+  background: var(--color-pass-bg);
+}
+.tag-fail {
+  color: var(--color-fail);
+  background: var(--color-err-bg);
+}
+.tag-maybe {
+  color: var(--color-maybe);
+  background: var(--color-warn-bg);
+}
+.tag-neutral {
+  color: var(--color-muted);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+
+.card {
+  position: relative;
+  border: 1px solid var(--color-line);
+  background: linear-gradient(180deg, var(--color-card-a), var(--color-card-b));
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 24px 60px -42px var(--color-glow);
+}
+/* landing-page panel signature: accent hairline across the top edge */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+}
+/* nested cards stay quiet (only section-level cards get the hairline) */
+.card .card::before {
+  display: none;
+}
+
+/* theme-aware logo: silver wordmark on dark surfaces, ink wordmark on light */
+.logo-dark {
+  display: none;
+}
+html[data-theme="light"] .logo-light {
+  display: none;
+}
+html[data-theme="light"] .logo-dark {
+  display: block;
+}
