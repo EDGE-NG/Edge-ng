@@ -60,17 +60,36 @@ nav a{text-decoration:none;color:var(--muted);font-size:.95rem}nav a:hover{color
 .ribbon .tube{fill:none;stroke-width:42;stroke-linecap:round;stroke-dasharray:1;animation:draw 2.4s cubic-bezier(.6,0,.2,1) .5s backwards;filter:drop-shadow(0 12px 18px rgba(0,0,0,.35))}
 .ribbon .tube.two{animation-delay:1s}
 @keyframes draw{from{stroke-dashoffset:1;opacity:0}8%{opacity:1}to{stroke-dashoffset:0;opacity:1}}
-.rv{left:max(2.5%,20px);bottom:15%;width:282px;padding:14px 14px 4px;border-radius:16px;text-align:left;background:rgba(4,28,20,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(220,255,60,.28);box-shadow:0 24px 60px -20px rgba(0,0,0,.6),0 0 40px -10px rgba(220,255,60,.25);font-size:.84rem;color:#e7f4ec;transform:translate(calc(var(--mx,0)*14px),calc(var(--my,0)*8px));transition:transform .3s}
+.rv{left:max(2.5%,20px);bottom:15%;width:288px;padding:14px 14px 12px;border-radius:16px;text-align:left;background:rgba(4,28,20,.58);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(220,255,60,.28);box-shadow:0 24px 60px -20px rgba(0,0,0,.6),0 0 40px -10px rgba(220,255,60,.25);font-size:.84rem;color:#e7f4ec;transform:translate(calc(var(--mx,0)*14px),calc(var(--my,0)*8px));transition:transform .3s}
 .rv-h{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.12);color:#a9c4b5;font-size:.78rem}
 .rv-h b{color:#fff;font-weight:500}
 .rv-h i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#dcff3c;margin-right:6px;animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
-.rv-r{white-space:nowrap;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)}
-.rv-r:last-child{border-bottom:0}
-.rv-t{text-align:center;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:600;border:1px solid currentColor;opacity:0;animation:tagin 11s infinite}
+.rv-s{font-style:normal;color:#dcff3c;transition:opacity .25s}
+.rv-dots{display:flex;gap:4px}.rv-dots u{width:14px;height:3px;border-radius:2px;background:rgba(255,255,255,.18);transition:background .3s}
+.rv[data-phase="0"] .rv-dots u:nth-child(1),.rv[data-phase="1"] .rv-dots u:nth-child(2),.rv[data-phase="2"] .rv-dots u:nth-child(3),.rv[data-phase="3"] .rv-dots u:nth-child(4){background:#dcff3c}
+.rv-body{display:grid;min-height:150px;margin-top:2px}
+.rv-rows,.rv-sum{grid-area:1/1;transition:opacity .35s,transform .35s}
+.rv-r{white-space:nowrap;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);transition:background .3s}
+.rv-r:last-of-type{border-bottom:0}
+.rv-tg{display:grid;justify-items:end}.rv-tg>*{grid-area:1/1}
+.rv-pre{font-size:.7rem;color:#7fa391;padding:3px 0;transition:opacity .25s}
+.rv-t{text-align:center;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:600;border:1px solid currentColor;opacity:0;transform:translateY(6px) scale(.92);transition:opacity .3s,transform .3s}
 .rv-t.p{color:#5be3a0}.rv-t.f{color:#ff7a8a}.rv-t.m{color:#ffd36b}
-.rv-r:nth-of-type(1) .rv-t{animation-delay:1.2s}.rv-r:nth-of-type(2) .rv-t{animation-delay:3s}.rv-r:nth-of-type(3) .rv-t{animation-delay:4.8s}
-@keyframes tagin{0%{opacity:0;transform:translateY(6px) scale(.9)}5%,80%{opacity:1;transform:none}90%,100%{opacity:0}}
+.rv[data-phase="0"] .rv-pre{opacity:1}.rv:not([data-phase="0"]) .rv-pre{opacity:0}
+.rv[data-phase="1"] .rv-t,.rv[data-phase="2"] .rv-t{opacity:1;transform:none}
+.rv[data-phase="1"] .rv-r:nth-of-type(1) .rv-t{transition-delay:.15s}.rv[data-phase="1"] .rv-r:nth-of-type(2) .rv-t{transition-delay:.85s}.rv[data-phase="1"] .rv-r:nth-of-type(3) .rv-t{transition-delay:1.55s}
+.rv-call{font-size:.78rem;color:#ffd36b;background:rgba(255,211,107,.1);border:1px solid rgba(255,211,107,.35);border-radius:10px;padding:7px 10px;margin-top:6px;opacity:0;transform:translateY(6px);transition:opacity .3s,transform .3s}
+.rv[data-phase="2"] .rv-call{opacity:1;transform:none}
+.rv[data-phase="2"] .rv-r:nth-of-type(2){background:rgba(255,122,138,.08)}
+.rv-sum{align-self:center;opacity:0;transform:translateY(8px);pointer-events:none}
+.rv[data-phase="3"] .rv-rows{opacity:0;transform:translateY(-8px)}.rv[data-phase="3"] .rv-sum{opacity:1;transform:none}
+.rv-sum .k{color:#a9c4b5;font-size:.76rem;margin-bottom:4px}
+.rv-sum .num{font-size:1.9rem;letter-spacing:-.04em;font-weight:500;line-height:1.1}.rv-sum .num small{font-size:.8rem;color:#a9c4b5;letter-spacing:0;margin-left:4px}
+.rv-bar{height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:12px 0}
+.rv-bar b{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbf68,#dcff3c);transition:width 1s cubic-bezier(.2,.7,.2,1)}
+.rv[data-phase="3"] .rv-bar b{width:66%}
+.rv-sum .row{display:flex;justify-content:space-between;color:#cfe4d8;font-size:.78rem;padding-top:6px;border-top:1px solid rgba(255,255,255,.08)}
 .glass{right:11%;top:20%;width:150px;height:150px;border-radius:30px;border:2px solid rgba(220,255,60,.75);background:linear-gradient(135deg,rgba(220,255,60,.16),rgba(220,255,60,0));box-shadow:0 0 34px rgba(220,255,60,.5),inset 0 0 34px rgba(220,255,60,.22);display:grid;place-items:center;transform:translate(calc(var(--mx,0)*-22px),calc(var(--my,0)*-14px)) rotate(18deg);animation:tilt 9s ease-in-out infinite alternate;transition:transform .3s}
 @keyframes tilt{from{rotate:0deg;translate:0 -8px}to{rotate:-14deg;translate:0 12px}}
 .flower{width:64px;height:64px;color:#ffc61a;filter:drop-shadow(0 0 14px #ffb300) drop-shadow(0 0 30px rgba(255,190,0,.6));animation:spin 14s linear infinite}
@@ -148,9 +167,9 @@ nav a{text-decoration:none;color:var(--muted);font-size:.95rem}nav a:hover{color
 /* why */
 .cards4{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:56px}
 .feat{position:relative;min-height:230px;padding:30px;border-radius:14px;border:1px solid var(--line);background:radial-gradient(circle at 15% 0,rgba(94,240,136,.1),transparent 55%),linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
-.tile{position:absolute;left:30px;top:28px;width:68px;height:68px;border-radius:20px;display:grid;place-items:center;color:#04150d;background:linear-gradient(145deg,#e6ff5a 0%,#5ef088 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -8px 14px rgba(0,90,45,.22),0 0 0 1px rgba(255,255,255,.12),0 10px 34px -4px var(--glow),0 0 48px 4px rgba(60,240,130,.18);transition:transform .35s cubic-bezier(.2,.7,.2,1)}
-.tile svg{width:36px;height:36px;transition:transform .35s cubic-bezier(.2,.7,.2,1)}
-.feat:hover .tile{transform:translateY(-3px)}.feat:hover .tile svg{transform:scale(1.1) rotate(-5deg)}
+.tile{position:absolute;left:30px;top:28px;width:56px;height:56px;border-radius:16px;display:grid;place-items:center;color:var(--accent);background:rgba(94,240,136,.08);border:1px solid rgba(94,240,136,.25);transition:background .3s,border-color .3s}
+.tile svg{width:28px;height:28px}
+.feat:hover .tile{background:rgba(94,240,136,.15);border-color:rgba(94,240,136,.55)}
 .feat h3{margin:0 0 6px;font-size:1.3rem;font-weight:500;letter-spacing:-.025em}.feat p{margin:0;color:var(--muted);max-width:26em}
 .not{margin:40px auto 0;text-align:center;color:var(--muted);max-width:40em;font-size:.98rem}
 
@@ -201,12 +220,13 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
   section{padding:76px 0}.frame{height:400px}
 }
 @media (max-width:540px){.steps{grid-template-columns:1fr}.rule{grid-template-columns:1fr}.bar .btn{padding:0 8px 0 16px}.cards{left:6%}}
+@media (max-width:1400px){.rv{scale:.8;transform-origin:left bottom;left:12px;bottom:12%}}
 @media (max-width:1180px){.rv{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="264" y1="0" x2="84" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="224" y1="0" x2="50" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient><linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="264" y1="0" x2="16" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient></defs><symbol id="edge-mark" viewBox="16.5 -16.8 265.5 217.5"><g transform="rotate(-9 140.0 92.0)"><rect x="84" y="8" width="180" height="50" rx="25.0" fill="url(#g0)"/><rect x="50" y="67" width="174" height="50" rx="25.0" fill="url(#g1)"/><rect x="16" y="126" width="248" height="50" rx="25.0" fill="url(#g2)"/></g></symbol></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs><linearGradient id="ig" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="48" y2="48"><stop offset="0" stop-color="#e6ff5a"/><stop offset="1" stop-color="#5ef088"/></linearGradient><linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="264" y1="0" x2="84" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="224" y1="0" x2="50" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient><linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="264" y1="0" x2="16" y2="0"><stop offset="0" stop-color="#e6ff5a"/><stop offset=".45" stop-color="#5ef088"/><stop offset="1" stop-color="#0a5c3e"/></linearGradient></defs><symbol id="edge-mark" viewBox="16.5 -16.8 265.5 217.5"><g transform="rotate(-9 140.0 92.0)"><rect x="84" y="8" width="180" height="50" rx="25.0" fill="url(#g0)"/><rect x="50" y="67" width="174" height="50" rx="25.0" fill="url(#g1)"/><rect x="16" y="126" width="248" height="50" rx="25.0" fill="url(#g2)"/></g></symbol></svg>
 
 
 <header>
@@ -235,11 +255,17 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
         <use href="#rp2" class="tube two" stroke="url(#rg2)" pathLength="1"/>
       </svg>
       <div class="fx fly" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
-      <div class="fx rv" aria-hidden="true">
-        <div class="rv-h"><span><i></i><b>EUR/USD</b> · Reviewing</span><span>3 rules</span></div>
-        <div class="rv-r"><span>Higher timeframe trend</span><span class="rv-t p">✓ Pass</span></div>
-        <div class="rv-r"><span>No entry in news window</span><span class="rv-t f">✕ Fail</span></div>
-        <div class="rv-r"><span>Confirmation candle</span><span class="rv-t m">? Inconclusive</span></div>
+      <div class="fx rv" data-phase="0" aria-hidden="true">
+        <div class="rv-h"><span><i></i><b>NASDAQ</b> · <em class="rv-s">Your edge</em></span><span class="rv-dots"><u></u><u></u><u></u><u></u></span></div>
+        <div class="rv-body">
+          <div class="rv-rows">
+            <div class="rv-r"><span>Higher timeframe trend</span><span class="rv-tg"><span class="rv-pre">approved</span><span class="rv-t p">✓ Pass</span></span></div>
+            <div class="rv-r"><span>No entry in news window</span><span class="rv-tg"><span class="rv-pre">approved</span><span class="rv-t f">✕ Fail</span></span></div>
+            <div class="rv-r"><span>Confirmation candle</span><span class="rv-tg"><span class="rv-pre">approved</span><span class="rv-t m">? Inconclusive</span></span></div>
+            <div class="rv-call">Proceed anyway → <b>override recorded</b></div>
+          </div>
+          <div class="rv-sum"><div class="k">Journal · this trade</div><div class="num">2 of 3<small>rules followed</small></div><div class="rv-bar"><b></b></div><div class="row"><span>1 override recorded</span><span>Process, not P&amp;L</span></div></div>
+        </div>
       </div>
       <div class="fx glass" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
 
@@ -270,7 +296,7 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
         <p>Before a trade, it reviews the chart rule by rule and shows its evidence. If you go ahead anyway, that’s recorded too, so you can learn from it later.</p>
       </div>
       <div class="panel" role="img" aria-label="Example review: one rule passed, one failed, one inconclusive">
-        <div class="panel-head"><span><b>EUR/USD</b> · Long setup review</span><span>Checklist v3</span></div>
+        <div class="panel-head"><span><b>NASDAQ</b> · Long setup review</span><span>Checklist v3</span></div>
         <div class="rule"><span class="tag pass">✓ Pass</span><div><h3>Higher timeframe trend is up</h3><p>Series of higher highs and lows on the 4H chart.</p></div></div>
         <div class="rule"><span class="tag fail">✕ Fail</span><div><h3>No entry inside news window</h3><p>Entry is 20 minutes before a rate decision.</p></div></div>
         <div class="rule"><span class="tag maybe">? Inconclusive</span><div><h3>Confirmation candle closed</h3><p>Switch to the 15m chart so I can check.</p></div></div>
@@ -295,7 +321,7 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
             <div class="li">Higher timeframe trend is up</div><div class="li">No entry inside news window</div><div class="li">Stop sits below swing low</div></div>
           <div class="card"><h4>Visual examples</h4><small>Attached to each rule</small>
             <div class="thumbs"><div class="ok"><svg viewBox="0 0 200 118" role="img" aria-label="Candlestick chart example"><line x1="6" x2="192" y1="30.0" y2="30.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="50.0" y2="50.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="70.0" y2="70.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="90.0" y2="90.0" stroke="#fff" stroke-opacity=".07"/><rect x="72.4" y="23.4" width="66.4" height="78.7" rx="3" fill="#5ef088" fill-opacity=".13" stroke="#5ef088" stroke-opacity=".8" stroke-dasharray="3 2"/><polyline fill="none" stroke="#ffd36b" stroke-opacity=".8" stroke-width="1.3" points="12.6,86.6 25.9,82.9 39.2,77.1 52.5,68.5 65.8,57.4 79.1,54.8 92.4,58.9 105.6,66.2 118.9,76.4 132.2,78.1 145.5,74.7 158.8,67.5 172.1,57.8 185.4,45.6"/><line x1="12.6" x2="12.6" y1="80.5" y2="98.7" stroke="#4ee283" stroke-width="1.2"/><rect x="8.9" y="86.6" width="7.4" height="9.3" rx=".8" fill="#4ee283"/><line x1="25.9" x2="25.9" y1="72.7" y2="91.7" stroke="#4ee283" stroke-width="1.2"/><rect x="22.2" y="75.4" width="7.4" height="11.0" rx=".8" fill="#4ee283"/><line x1="39.2" x2="39.2" y1="62.9" y2="80.2" stroke="#4ee283" stroke-width="1.2"/><rect x="35.5" y="65.7" width="7.4" height="11.6" rx=".8" fill="#4ee283"/><line x1="52.5" x2="52.5" y1="48.1" y2="69.7" stroke="#4ee283" stroke-width="1.2"/><rect x="48.8" y="51.3" width="7.4" height="14.7" rx=".8" fill="#4ee283"/><line x1="65.8" x2="65.8" y1="29.3" y2="55.4" stroke="#4ee283" stroke-width="1.2"/><rect x="62.1" y="35.0" width="7.4" height="15.7" rx=".8" fill="#4ee283"/><line x1="79.1" x2="79.1" y1="25.8" y2="53.7" stroke="#ff6b7d" stroke-width="1.2"/><rect x="75.4" y="33.1" width="7.4" height="16.6" rx=".8" fill="#ff6b7d"/><line x1="92.4" x2="92.4" y1="46.9" y2="74.2" stroke="#ff6b7d" stroke-width="1.2"/><rect x="88.6" y="51.1" width="7.4" height="16.0" rx=".8" fill="#ff6b7d"/><line x1="105.6" x2="105.6" y1="62.4" y2="85.2" stroke="#ff6b7d" stroke-width="1.2"/><rect x="101.9" y="68.4" width="7.4" height="12.3" rx=".8" fill="#ff6b7d"/><line x1="118.9" x2="118.9" y1="77.7" y2="100.5" stroke="#ff6b7d" stroke-width="1.2"/><rect x="115.2" y="80.5" width="7.4" height="16.4" rx=".8" fill="#ff6b7d"/><line x1="132.2" x2="132.2" y1="77.2" y2="101.9" stroke="#4ee283" stroke-width="1.2"/><rect x="128.5" y="81.4" width="7.4" height="14.8" rx=".8" fill="#4ee283"/><line x1="145.5" x2="145.5" y1="61.0" y2="88.0" stroke="#4ee283" stroke-width="1.2"/><rect x="141.8" y="67.9" width="7.4" height="13.7" rx=".8" fill="#4ee283"/><line x1="158.8" x2="158.8" y1="47.6" y2="76.3" stroke="#4ee283" stroke-width="1.2"/><rect x="155.1" y="53.0" width="7.4" height="15.9" rx=".8" fill="#4ee283"/><line x1="172.1" x2="172.1" y1="30.5" y2="55.2" stroke="#4ee283" stroke-width="1.2"/><rect x="168.4" y="38.4" width="7.4" height="13.6" rx=".8" fill="#4ee283"/><line x1="185.4" x2="185.4" y1="18.1" y2="44.0" stroke="#4ee283" stroke-width="1.2"/><rect x="181.6" y="21.4" width="7.4" height="17.4" rx=".8" fill="#4ee283"/><path d="M132.2 104.9 l5 8.5 h-10z" fill="#dcff3c"/></svg><span class="cap pass">✓ Valid pullback</span></div><div class="no"><svg viewBox="0 0 200 118" role="img" aria-label="Candlestick chart example"><line x1="6" x2="192" y1="30.0" y2="30.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="50.0" y2="50.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="70.0" y2="70.0" stroke="#fff" stroke-opacity=".07"/><line x1="6" x2="192" y1="90.0" y2="90.0" stroke="#fff" stroke-opacity=".07"/><rect x="85.7" y="59.6" width="66.4" height="33.7" rx="3" fill="#ff7a8a" fill-opacity=".13" stroke="#ff7a8a" stroke-opacity=".8" stroke-dasharray="3 2"/><line x1="6" x2="192" y1="62.2" y2="62.2" stroke="#ffd36b" stroke-opacity=".85" stroke-dasharray="4 3"/><polyline fill="none" stroke="#ffd36b" stroke-opacity=".8" stroke-width="1.3" points="12.6,52.5 25.9,49.4 39.2,43.7 52.5,36.9 65.8,32.9 79.1,34.0 92.4,39.3 105.6,45.9 118.9,53.6 132.2,60.9 145.5,70.2 158.8,78.2 172.1,84.0 185.4,89.2"/><line x1="12.6" x2="12.6" y1="46.2" y2="65.5" stroke="#4ee283" stroke-width="1.2"/><rect x="8.9" y="52.5" width="7.4" height="8.9" rx=".8" fill="#4ee283"/><line x1="25.9" x2="25.9" y1="40.5" y2="56.8" stroke="#4ee283" stroke-width="1.2"/><rect x="22.2" y="43.3" width="7.4" height="9.1" rx=".8" fill="#4ee283"/><line x1="39.2" x2="39.2" y1="30.0" y2="46.2" stroke="#4ee283" stroke-width="1.2"/><rect x="35.5" y="32.4" width="7.4" height="10.5" rx=".8" fill="#4ee283"/><line x1="52.5" x2="52.5" y1="18.0" y2="35.9" stroke="#4ee283" stroke-width="1.2"/><rect x="48.8" y="23.2" width="7.4" height="10.6" rx=".8" fill="#4ee283"/><line x1="65.8" x2="65.8" y1="16.6" y2="29.9" stroke="#ff6b7d" stroke-width="1.2"/><rect x="62.1" y="21.6" width="7.4" height="3.5" rx=".8" fill="#ff6b7d"/><line x1="79.1" x2="79.1" y1="21.8" y2="38.2" stroke="#ff6b7d" stroke-width="1.2"/><rect x="75.4" y="26.2" width="7.4" height="9.8" rx=".8" fill="#ff6b7d"/><line x1="92.4" x2="92.4" y1="34.9" y2="54.0" stroke="#ff6b7d" stroke-width="1.2"/><rect x="88.6" y="37.0" width="7.4" height="12.9" rx=".8" fill="#ff6b7d"/><line x1="105.6" x2="105.6" y1="45.7" y2="63.9" stroke="#ff6b7d" stroke-width="1.2"/><rect x="101.9" y="50.1" width="7.4" height="8.9" rx=".8" fill="#ff6b7d"/><line x1="118.9" x2="118.9" y1="54.9" y2="72.4" stroke="#ff6b7d" stroke-width="1.2"/><rect x="115.2" y="59.0" width="7.4" height="10.1" rx=".8" fill="#ff6b7d"/><line x1="132.2" x2="132.2" y1="61.7" y2="80.7" stroke="#ff6b7d" stroke-width="1.2"/><rect x="128.5" y="67.5" width="7.4" height="7.9" rx=".8" fill="#ff6b7d"/><line x1="145.5" x2="145.5" y1="72.7" y2="91.3" stroke="#ff6b7d" stroke-width="1.2"/><rect x="141.8" y="76.0" width="7.4" height="13.0" rx=".8" fill="#ff6b7d"/><line x1="158.8" x2="158.8" y1="82.2" y2="97.8" stroke="#ff6b7d" stroke-width="1.2"/><rect x="155.1" y="88.1" width="7.4" height="5.9" rx=".8" fill="#ff6b7d"/><line x1="172.1" x2="172.1" y1="90.5" y2="98.4" stroke="#ff6b7d" stroke-width="1.2"/><rect x="168.4" y="92.5" width="7.4" height="3.0" rx=".8" fill="#ff6b7d"/><line x1="185.4" x2="185.4" y1="87.7" y2="103.4" stroke="#ff6b7d" stroke-width="1.2"/><rect x="181.6" y="94.2" width="7.4" height="5.5" rx=".8" fill="#ff6b7d"/><g stroke="#ff7a8a" stroke-width="2" stroke-linecap="round"><path d="M114.9 78.4 l8 8 M122.9 78.4 l-8 8"/></g></svg><span class="cap fail">✕ Not valid</span></div></div></div>
-          <div class="card"><h4>Trade review</h4><small>EUR/USD · Long</small>
+          <div class="card"><h4>Trade review</h4><small>NASDAQ · Long</small>
             <div class="li">Trend is up <s class="pass">✓ Pass</s></div><div class="li">News window <s class="fail">✕ Fail</s></div><div class="li">Confirmation <s class="maybe">? Inconclusive</s></div></div>
           <div class="card"><h4>Your journal</h4><small>This week</small>
             <div style="font-size:2rem;letter-spacing:-.04em">8 of 10 <span style="font-size:1rem;color:var(--muted)">rules followed</span></div><div class="bar2"><b></b></div><div class="li">1 override recorded <s class="maybe">Reviewed</s></div></div>
@@ -315,10 +341,10 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
     <div class="wrap">
       <div class="center"><h2 id="why-h">Why traders choose <em>Edge</em></h2><p class="sub">It helps you follow your plan. It never decides for you.</p></div>
       <div class="cards4">
-        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="15" height="17" rx="3" fill="rgba(4,21,13,.14)"/><path d="M8.3 8.8l1.3 1.3 2.2-2.4"/><path d="M14 8.9h2.8"/><path d="M8.3 13.6l1.3 1.3 2.2-2.4"/><path d="M14 13.7h2.8"/><circle cx="9.6" cy="18" r="1"/><path d="M14 18h2.8"/></svg></div><h3>Built from your rules</h3><p>Your strategy, in your words. Nothing becomes a rule until you approve it.</p></div>
-        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5" fill="rgba(4,21,13,.14)"/><path d="M15.4 15.4L20.5 20.5"/><path d="M7 12.2l2.4-2.5 1.8 1.4 2.6-3.1"/></svg></div><h3>Evidence for every result</h3><p>Each Pass or Fail shows what Edge saw on the chart and why.</p></div>
-        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" stroke-dasharray="2.7 2.4"/><path d="M9.6 9.9c0-1.4 1.1-2.4 2.5-2.4s2.5.9 2.5 2.1c0 1-.6 1.5-1.4 2-.7.4-1.1.9-1.1 1.8"/><path d="M12.1 16.6h.01" stroke-width="2.6"/></svg></div><h3>Honest about doubt</h3><p>If the chart doesn’t show enough, Edge says Inconclusive and asks for another view.</p></div>
-        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.8v4.2h4.2"/><path d="M12 7.6v4.6l3 1.8"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg></div><h3>Every override recorded</h3><p>Trade against a Fail if you choose. Edge logs it in your journal, without judgment.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7l1.8 1.8L9 5.2"/><path d="M3.5 16.5l1.8 1.8L9 14.7"/><path d="M13 7h7.5"/><path d="M13 16.5h7.5"/></svg></div><h3>Built from your rules</h3><p>Your strategy, in your words. Nothing becomes a rule until you approve it.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.4-4.4"/><path d="M8.2 11l2 2 3.5-3.8"/></svg></div><h3>Evidence for every result</h3><p>Each Pass or Fail shows what Edge saw on the chart and why.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.5a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 4"/><path d="M12 17.3h.01"/></svg></div><h3>Honest about doubt</h3><p>If the chart doesn’t show enough, Edge says Inconclusive and asks for another view.</p></div>
+        <div class="feat"><div class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></div><h3>Every override recorded</h3><p>Trade against a Fail if you choose. Edge logs it in your journal, without judgment.</p></div>
       </div>
       <p class="not">Edge gives no signals, predicts no markets, and places no trades. It is decision support, not financial advice.</p>
     </div>
@@ -374,6 +400,16 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
   var hero=document.getElementById('hero');
   if(!still&&hero){hero.addEventListener('pointermove',function(e){var r=hero.getBoundingClientRect();
     hero.style.setProperty('--mx',((e.clientX-r.left)/r.width*2-1).toFixed(3));hero.style.setProperty('--my',((e.clientY-r.top)/r.height*2-1).toFixed(3))})}
+
+
+  /* hero demo card: one loop (~7.6 s) = edge -> review -> decision -> journal */
+  var rv=document.querySelector('.rv');
+  if(rv){
+    var labels=['Your edge','Reviewing','Your decision','Journal'], times=[1700,2700,1500,1700], ph=0, lab=rv.querySelector('.rv-s');
+    function setPhase(n){ph=n;rv.setAttribute('data-phase',n);lab.textContent=labels[n]}
+    function nextPhase(){setPhase((ph+1)%4);setTimeout(nextPhase,times[ph])}
+    if(still){setPhase(1)}else{setPhase(0);setTimeout(nextPhase,times[0])}
+  }
 
   /* how it works: stacked cards + steps */
   var cards=[].slice.call(document.querySelectorAll('.card')), steps=[].slice.call(document.querySelectorAll('.step')), cur=0, timer;
