@@ -94,9 +94,12 @@ nav a{text-decoration:none;color:var(--muted);font-size:.95rem}nav a:hover{color
 @keyframes tilt{from{rotate:0deg;translate:0 -8px}to{rotate:-14deg;translate:0 12px}}
 .flower{width:64px;height:64px;color:#ffc61a;filter:drop-shadow(0 0 14px #ffb300) drop-shadow(0 0 30px rgba(255,190,0,.6));animation:spin 14s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.fly{left:0;top:0;width:34px;height:34px;offset-path:path('M-40 560 C 260 80 700 700 1500 120');offset-rotate:0deg;animation:fly 16s linear infinite}
+.fly{left:0;top:0;width:54px;height:54px;offset-path:path('M-40 560 C 260 80 700 700 1500 120');offset-rotate:0deg;animation:fly 16s linear infinite}
 .fly .flower{width:34px;height:34px;color:#d9ff3a}
 @keyframes fly{from{offset-distance:0%}to{offset-distance:100%}}
+.candles{width:54px;height:54px;filter:drop-shadow(0 0 8px rgba(220,255,60,.55));animation:bob 3.2s ease-in-out infinite alternate}
+@keyframes bob{from{transform:translateY(-4px) rotate(-6deg)}to{transform:translateY(5px) rotate(6deg)}}
+.glass .markbig{width:78px;height:64px;filter:drop-shadow(0 0 16px rgba(94,240,136,.65))}
 .kick{margin:0 0 18px;font-size:clamp(1.3rem,2.6vw,2rem);font-weight:300;letter-spacing:-.03em;color:#eafff2;display:flex;gap:.35em;justify-content:center}
 .swap{display:inline-grid;text-align:left}
 .swap span{grid-area:1/1;opacity:0;animation:sw 9s infinite}
@@ -214,7 +217,7 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
 @media (max-width:900px){
   nav{display:none}
   .rv{display:none}
-  .glass{width:96px;height:96px;right:5%;top:9%;border-radius:20px}.flower{width:42px;height:42px}.scene{padding:70px 0 100px}
+  .glass{width:96px;height:96px;right:5%;top:9%;border-radius:20px}.glass .markbig{width:50px;height:41px}.scene{padding:70px 0 100px}
   .plain,.cards4{grid-template-columns:1fr;gap:32px}
   .steps{grid-template-columns:1fr 1fr}.cols{grid-template-columns:1fr 1fr}
   section{padding:76px 0}.frame{height:400px}
@@ -254,7 +257,7 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
         </defs>
         <use href="#rp2" class="tube two" stroke="url(#rg2)" pathLength="1"/>
       </svg>
-      <div class="fx fly" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
+      <div class="fx fly" aria-hidden="true"><svg class="candles" viewBox="0 0 40 40" aria-hidden="true"><g stroke-linecap="round"><path d="M9 8v24" stroke="#4ee283" stroke-width="2"/><rect x="5.5" y="14" width="7" height="12" rx="1.5" fill="#4ee283"/><path d="M20 4v28" stroke="#ff6b7d" stroke-width="2"/><rect x="16.5" y="9" width="7" height="14" rx="1.5" fill="#ff6b7d"/><path d="M31 10v26" stroke="#dcff3c" stroke-width="2"/><rect x="27.5" y="16" width="7" height="14" rx="1.5" fill="#dcff3c"/></g></svg></div>
       <div class="fx rv" data-phase="0" aria-hidden="true">
         <div class="rv-h"><span><i></i><b>NASDAQ</b> · <em class="rv-s">Your edge</em></span><span class="rv-dots"><u></u><u></u><u></u><u></u></span></div>
         <div class="rv-body">
@@ -267,7 +270,7 @@ footer{border-top:1px solid var(--line);padding:56px 0 30px;color:var(--muted);f
           <div class="rv-sum"><div class="k">Journal · this trade</div><div class="num">2 of 3<small>rules followed</small></div><div class="rv-bar"><b></b></div><div class="row"><span>1 override recorded</span><span>Process, not P&amp;L</span></div></div>
         </div>
       </div>
-      <div class="fx glass" aria-hidden="true"><svg class="flower" viewBox="-50 -50 100 100" aria-hidden="true"><g fill="currentColor"><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(0)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(45)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(90)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(135)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(180)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(225)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(270)"/><ellipse cx="0" cy="-26" rx="13" ry="19" transform="rotate(315)"/><circle r="14"/></g></svg></div>
+      <div class="fx glass" aria-hidden="true"><svg class="markbig" aria-hidden="true"><use href="#edge-mark"/></svg></div>
 
       <div class="wrap">
         <p class="kick"><span>Your</span><span class="swap" aria-hidden="true"><span>rules</span><span>setup</span><span>edge</span></span></p>
