@@ -138,6 +138,42 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 
+-- PRD 9.3 "Chat and plan": every chat has a purpose and (once rules are
+-- extracted) the edge it is building.
+CREATE TABLE IF NOT EXISTS chats (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL DEFAULT 'build_edge',
+  edge_id TEXT REFERENCES edges(id) ON DELETE SET NULL,
+  title TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chats_user_updated ON chats(user_id, updated_at DESC);
+
+-- kind: text | checklist | error. payload_json holds the checklist snapshot
+-- (rules + clarifying questions) an Edge reply showed at that moment.
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'text',
+  content TEXT NOT NULL,
+  payload_json TEXT,
+  via_voice INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_messages_chat ON chat_messages(chat_id, created_at);
+
+-- PRD F1 step 3: the disclaimer the trader accepted, by version and time.
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document_type TEXT NOT NULL,
+  document_version TEXT NOT NULL,
+  accepted_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS auth_tokens (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
@@ -176,6 +212,15 @@ function ensureColumns(database: DatabaseSync): void {
   ]);
   ensure("users", [
     ["settings_json", "TEXT"], // notification preferences + account settings (PRD 4.8)
+    ["password_hash", "TEXT"], // scrypt hash (PRD REQ-ID-1); null for email-code/demo accounts
+    ["last_login_at", "TEXT"],
+  ]);
+  // PRD 5.2: every extracted rule keeps the exact words it came from, how it
+  // can be checked, and which timeframe it needs.
+  ensure("checklist_items", [
+    ["source_span", "TEXT"],
+    ["assessability", "TEXT"], // chart | context_needed | manual
+    ["required_timeframe", "TEXT"],
   ]);
 }
 

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "homepage": "node scripts/build-homepage.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

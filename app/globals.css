@@ -249,3 +249,337 @@ html[data-theme="light"] .logo-light {
 html[data-theme="light"] .logo-dark {
   display: block;
 }
+
+/* ------------------------------------------------------------------------
+ * .theme-dark: pin a subtree to the dark tokens regardless of the app theme.
+ * Used by the auth screens, which continue the homepage's dark emerald scene.
+ * --------------------------------------------------------------------- */
+.theme-dark {
+  color-scheme: dark;
+  --color-bg: #000000;
+  --color-deep: #05231b;
+  --color-surface: #0a0f0d;
+  --color-panel: #101613;
+  --color-line: rgba(255, 255, 255, 0.09);
+  --color-ink: #f4f6f5;
+  --color-muted: #8c958f;
+  --color-accent: #5ef088;
+  --color-soft: #b6ffcd;
+  --color-pass: #5be3a0;
+  --color-fail: #ff7a8a;
+  --color-maybe: #ffd36b;
+  --color-err-bg: #2c0f15;
+  --color-warn-bg: #2c250c;
+  --color-track: #1a2520;
+  --color-hr: rgba(255, 255, 255, 0.12);
+  --color-card-a: #16201b;
+  --color-card-b: #0a0f0d;
+  --color-input-bg: rgba(0, 0, 0, 0.35);
+  --color-btn-main-bg: #e9f6ec;
+  --color-btn-main-fg: #04110a;
+  --color-btn-main-hover: #ffffff;
+  --color-pass-bg: #0e2a1b;
+  --color-glow: rgba(40, 210, 120, 0.22);
+  color: var(--color-ink);
+}
+
+/* ------------------------------------------------------------------------
+ * Auth scene: the homepage hero (emerald gradients, rings, drifting blobs)
+ * behind the sign-in / sign-up card.
+ * --------------------------------------------------------------------- */
+.auth-scene {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse 60% 55% at 12% 100%, rgba(205, 255, 60, 0.22), transparent 62%),
+    radial-gradient(ellipse 55% 65% at 88% 0, #0e9068 0, transparent 62%),
+    linear-gradient(180deg, #03231b 0%, #05382a 58%, #000 100%);
+}
+.auth-scene .fx {
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+}
+.auth-scene .rings {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.auth-scene .rings circle {
+  fill: none;
+  stroke: rgba(190, 255, 215, 0.16);
+  stroke-width: 1.2;
+}
+.auth-scene .rings .run {
+  stroke: #dcff3c;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 150 1923;
+  filter: drop-shadow(0 0 8px #dcff3c);
+  animation: auth-run 13s linear infinite;
+}
+@keyframes auth-run {
+  to {
+    stroke-dashoffset: -2073;
+  }
+}
+.auth-scene .blob {
+  border-radius: 50%;
+  filter: blur(60px);
+  animation: auth-drift 14s ease-in-out infinite alternate;
+}
+.auth-scene .blob.l {
+  width: 420px;
+  height: 420px;
+  left: -8%;
+  bottom: -10%;
+  background: rgba(205, 255, 60, 0.3);
+}
+.auth-scene .blob.t {
+  width: 360px;
+  height: 360px;
+  right: 4%;
+  top: -14%;
+  background: rgba(20, 180, 140, 0.45);
+  animation-delay: -5s;
+}
+@keyframes auth-drift {
+  to {
+    transform: translate(40px, -30px) scale(1.12);
+  }
+}
+/* glass panel: the homepage .panel / hero review card */
+.glass-panel {
+  position: relative;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(4, 28, 20, 0.72), rgba(2, 14, 10, 0.78));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.8), 0 0 60px -30px rgba(220, 255, 60, 0.25);
+}
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+}
+.lime {
+  color: #dcff3c;
+}
+
+/* ------------------------------------------------------------------------
+ * Chat (the first screen after sign-in, PRD 4.1)
+ * --------------------------------------------------------------------- */
+.chat-composer {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -36px var(--color-glow), 0 1px 0 0 rgba(255, 255, 255, 0.03) inset;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.chat-composer:focus-within {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-line));
+  box-shadow: 0 24px 70px -30px var(--color-glow);
+}
+.chat-composer textarea {
+  background: transparent;
+  resize: none;
+  outline: none;
+  width: 100%;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+.chat-composer textarea::placeholder {
+  color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+}
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  color: var(--color-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.icon-btn:hover:not(:disabled) {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* Speak: a clearly visible pill (the plain icon-btn grey was too faint) */
+.speak-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 15px 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-ink);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.speak-btn svg {
+  color: var(--color-accent);
+}
+.speak-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+  border-color: var(--color-accent);
+}
+.speak-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.composer-hint {
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--color-ink) 62%, transparent);
+}
+.send-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #5ef088;
+  color: #04110a;
+  border: 0;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s, background 0.15s;
+}
+.send-btn:hover:not(:disabled) {
+  background: #8af7aa;
+  transform: translateY(-1px);
+}
+.send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-fail);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.rec-bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+}
+.rec-bars i {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transition: height 0.08s linear;
+}
+.typing {
+  display: inline-flex;
+  gap: 5px;
+}
+.typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: typing 1.2s ease-in-out infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes typing {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 0.88rem;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.chip-btn:hover {
+  color: var(--color-ink);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-line));
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: var(--color-muted);
+  font-size: 0.92rem;
+  text-align: left;
+  transition: color 0.15s, background 0.15s;
+}
+.side-link:hover,
+.side-link[aria-current="page"] {
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 6%, transparent);
+}
+.rule-row:hover .rule-actions,
+.rule-row:focus-within .rule-actions {
+  opacity: 1;
+}
+.rule-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+@media (hover: none) {
+  .rule-actions {
+    opacity: 1;
+  }
+}
+.fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

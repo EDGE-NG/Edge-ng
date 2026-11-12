@@ -1,10 +1,64 @@
 import { db, now, uuid } from "./db";
 import { cookies } from "next/headers";
-import { randomBytes } from "node:crypto";
+import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE = "edge_session";
 const SESSION_TTL_DAYS = 30;
 const CODE_TTL_MINUTES = 15;
+
+/* ---------------------------------------------------- passwords --------- */
+// scrypt is the "equivalent" the PRD allows next to argon2id (REQ-ID-1) and
+// ships with Node, so there is no native dependency to install.
+const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
+export const PASSWORD_MIN = 8;
+
+function scryptAsync(password: string, salt: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) =>
+    scrypt(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p }, (err, key) =>
+      err ? reject(err) : resolve(key)
+    )
+  );
+}
+
+/** Hash as `scrypt$N$r$p$salt$hash` so parameters can be raised later. */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const key = await scryptAsync(password, salt);
+  return ["scrypt", SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString("base64"), key.toString("base64")].join("$");
+}
+
+export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
+  if (!stored) return false;
+  const [algo, , , , saltB64, keyB64] = stored.split("$");
+  if (algo !== "scrypt" || !saltB64 || !keyB64) return false;
+  const expected = Buffer.from(keyB64, "base64");
+  const actual = await scryptAsync(password, Buffer.from(saltB64, "base64"));
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/** A hash to compare against when the email is unknown, so timing doesn't reveal it. */
+let dummyHash: Promise<string> | null = null;
+export function getDummyHash(): Promise<string> {
+  return (dummyHash ??= hashPassword(randomBytes(12).toString("hex")));
+}
+
+/* ------------------------------------------------- attempt limiter ------ */
+// In-memory, per key (email or IP): enough to slow password guessing on a
+// single server. Swap for a shared store (Redis) when the API scales out.
+const attempts = new Map<string, { count: number; resetAt: number }>();
+export function tooManyAttempts(key: string, max = 8, windowMs = 15 * 60_000): boolean {
+  const t = Date.now();
+  const entry = attempts.get(key);
+  if (!entry || entry.resetAt < t) {
+    attempts.set(key, { count: 1, resetAt: t + windowMs });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > max;
+}
+export function clearAttempts(key: string): void {
+  attempts.delete(key);
+}
 
 export interface User {
   id: string;
