@@ -10,6 +10,7 @@
     "homepage": "node scripts/build-homepage.mjs"
   },
   "dependencies": {
+    "lightweight-charts": "5.0.8",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0"

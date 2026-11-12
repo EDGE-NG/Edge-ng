@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import ComingNext from "../../_components/coming-next";
+import Workspace from "./workspace";
 
 export const metadata: Metadata = { title: "Trade workspace – Edge" };
 
 export default function Page() {
-  return <ComingNext section="workspace" />;
+  return <Workspace />;
 }
