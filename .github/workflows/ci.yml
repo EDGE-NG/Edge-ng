@@ -1,0 +1,74 @@
+# Checks that must pass before a pull request can be merged into main.
+# Make them required in GitHub: Settings → Branches → branch protection for main.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (api) - lint, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - name: Install (also builds shared/)
+        run: npm ci
+      - name: Lint
+        run: npm run lint -w @edge/api
+      - name: Unit tests (decision engine and more)
+        run: npm run test -w @edge/api
+      - name: End-to-end tests
+        run: npm run test:e2e -w @edge/api
+      - name: Build
+        run: npm run build -w @edge/api
+
+  frontend:
+    name: Frontend (web) - lint, type check, build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+      - name: Install (also builds shared/)
+        run: npm ci
+      - name: Lint
+        run: npm run lint -w @edge/web
+      - name: Build (includes the TypeScript type check)
+        run: npm run build -w @edge/web
+
+  safety:
+    name: Safety - no secrets or env files committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block committed .env files
+        run: |
+          found=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
+          if [ -n "$found" ]; then
+            echo "These env files must not be committed:"; echo "$found"; exit 1
+          fi
+      - name: Block obvious secret keys
+        run: |
+          if git grep -nE '(sk-[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{10,}|service_role[^\n]*eyJ[A-Za-z0-9_-]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)' -- . ':!package-lock.json'; then
+            echo "Possible secret found above. Remove it and rotate the key."; exit 1
+          fi
+      - name: Block banned gate wording (PR-GT-8)
+        run: |
+          if git grep -niE 'good trade|will win|guaranteed profit' -- web/src api/src shared/src; then
+            echo "Edge never predicts. Use 'passes your checklist' / 'fails your checklist'."; exit 1
+          fi

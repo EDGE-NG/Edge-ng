@@ -56,7 +56,7 @@ export interface RuleCheck {
 
 /**
  * PR-GT-8: the only wording Edge uses for outcomes.
- * Never say a trade is "good" or will win.
+ * Never call a trade good or predict its outcome.
  */
 export const GATE_RESULT_LABELS: Record<GateResult, string> = {
   approved: 'Passes your checklist',
