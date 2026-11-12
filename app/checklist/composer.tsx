@@ -6,7 +6,7 @@
  * the trader to correct; nothing is sent until they press send.
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { IconArrowUp, IconCheck, IconMic, IconX } from "./icons";
+import { IconArrowUp, IconCheck, IconMic, IconX } from "../_components/icons";
 import { MAX_MESSAGE_CHARS } from "./types";
 
 const MAX_RECORD_SECONDS = 180;

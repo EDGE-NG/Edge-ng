@@ -165,6 +165,139 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS chat_messages_chat ON chat_messages(chat_id, created_at);
 
+-- PRD 4.3 / 9.3 Evidence: 1 to 6 chart images per rule, attached to
+-- (edge, item_key) so they survive checklist revisions. Replaced and archived
+-- images are kept (status) so past decisions keep what they used (PR-EV-6).
+CREATE TABLE IF NOT EXISTS evidence_images (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  edge_id TEXT NOT NULL REFERENCES edges(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  polarity TEXT NOT NULL,              -- valid | invalid
+  status TEXT NOT NULL,                -- uploaded | interpreted | confirmed | replaced | archived
+  object_key TEXT NOT NULL,            -- file name in the evidence store
+  mime_type TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  width INTEGER,
+  height INTEGER,
+  sha256 TEXT NOT NULL,
+  trader_note TEXT,
+  interpretation_text TEXT,            -- what Edge reads in the image for this rule
+  interpretation_json TEXT,            -- structured reading (timeframe, instrument, features, flags)
+  interpretation_confirmed_at TEXT,
+  corrected INTEGER NOT NULL DEFAULT 0, -- 1 when the trader rewrote Edge's reading
+  supersedes_id TEXT,
+  created_at TEXT NOT NULL,
+  archived_at TEXT
+);
+CREATE INDEX IF NOT EXISTS evidence_rule ON evidence_images(edge_id, item_key, status);
+
+-- PRD 5.3 rule card: Edge's stored reading of a rule, rebuilt whenever its
+-- confirmed images change; supplied as context at comparison time.
+CREATE TABLE IF NOT EXISTS rule_cards (
+  edge_id TEXT NOT NULL REFERENCES edges(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  card_version INTEGER NOT NULL,
+  valid_summary TEXT,
+  invalid_summary TEXT,
+  coverage_json TEXT,
+  source_image_ids TEXT,
+  built_at TEXT NOT NULL,
+  PRIMARY KEY (edge_id, item_key)
+);
+
+-- PRD 4.4 / 4.5 / 9.3 Trade workspace and pre-trade gate.
+CREATE TABLE IF NOT EXISTS workspace_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  edge_id TEXT NOT NULL REFERENCES edges(id) ON DELETE CASCADE,
+  checklist_version_id TEXT NOT NULL,   -- the version checks run against (EC-P10)
+  instrument TEXT NOT NULL,
+  asset_class TEXT NOT NULL,
+  platform TEXT,
+  risk_params_json TEXT,                -- risk limits read from the risk rules, checked in code
+  started_at TEXT NOT NULL,
+  ended_at TEXT
+);
+
+-- A captured chart view: Edge-rendered frame + the metadata and candles behind it.
+CREATE TABLE IF NOT EXISTS chart_frames (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES workspace_sessions(id) ON DELETE CASCADE,
+  instrument TEXT NOT NULL,
+  timeframe TEXT NOT NULL,
+  source TEXT NOT NULL,                 -- edge_chart | data_render | tab_capture | user_capture
+  visible_from INTEGER,
+  visible_to INTEGER,
+  indicators_json TEXT,
+  object_key TEXT,
+  candles_json TEXT NOT NULL,           -- market snapshot used for grounding
+  data_as_of INTEGER,
+  captured_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chart_frames_session ON chart_frames(session_id, timeframe, captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS rule_checks (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES workspace_sessions(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  frame_id TEXT,
+  result TEXT NOT NULL,                 -- pass | fail | inconclusive
+  observed_facts TEXT,
+  reasoning TEXT,
+  confidence TEXT,                      -- high | medium | low
+  evidence_json TEXT,                   -- frame, candle range, reference image ids
+  missing_evidence TEXT,
+  is_hard_gate INTEGER NOT NULL,
+  source TEXT NOT NULL,                 -- llm | code | trader
+  model TEXT,
+  checked_at TEXT NOT NULL,
+  stale_after TEXT
+);
+CREATE INDEX IF NOT EXISTS rule_checks_session ON rule_checks(session_id, item_key, checked_at DESC);
+
+CREATE TABLE IF NOT EXISTS trade_intents (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES workspace_sessions(id) ON DELETE CASCADE,
+  instrument TEXT NOT NULL,
+  side TEXT NOT NULL,                   -- buy | sell
+  entry_price REAL NOT NULL,
+  stop_price REAL,
+  target_price REAL,
+  account_size REAL,
+  risk_amount REAL,
+  risk_pct REAL,
+  risk_reward REAL,
+  status TEXT NOT NULL,                 -- decided | expired | cancelled | placed
+  idempotency_key TEXT UNIQUE,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS gate_decisions (
+  id TEXT PRIMARY KEY,
+  intent_id TEXT NOT NULL REFERENCES trade_intents(id) ON DELETE CASCADE,
+  checklist_version_id TEXT NOT NULL,
+  result TEXT NOT NULL,                 -- approved | denied | needs_evidence
+  reasons_json TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL,          -- rules, checks, frames, ticket, model versions (REQ-GT-5)
+  reference_price REAL,
+  price_tolerance REAL,
+  valid_until TEXT,
+  decided_at TEXT NOT NULL,
+  resolution TEXT,                      -- accepted_denial | overridden | expired | placed | cancelled
+  resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS overrides (
+  id TEXT PRIMARY KEY,
+  decision_id TEXT NOT NULL REFERENCES gate_decisions(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rules_overridden_json TEXT NOT NULL,
+  reason_text TEXT,
+  created_at TEXT NOT NULL
+);
+
 -- PRD F1 step 3: the disclaimer the trader accepted, by version and time.
 CREATE TABLE IF NOT EXISTS legal_acceptances (
   id TEXT PRIMARY KEY,
@@ -185,7 +318,6 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 `;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __edgeDb: DatabaseSync | undefined;
 }
 
@@ -221,7 +353,10 @@ function ensureColumns(database: DatabaseSync): void {
     ["source_span", "TEXT"],
     ["assessability", "TEXT"], // chart | context_needed | manual
     ["required_timeframe", "TEXT"],
+    ["item_key", "TEXT"], // stable across versions (PRD 9.3)
   ]);
+  database.exec("UPDATE checklist_items SET item_key = id WHERE item_key IS NULL");
+  database.exec("CREATE INDEX IF NOT EXISTS checklist_items_key ON checklist_items(item_key)");
 }
 
 function createDb(): DatabaseSync {
@@ -240,6 +375,13 @@ function createDb(): DatabaseSync {
 }
 
 export const db: DatabaseSync = globalThis.__edgeDb ?? (globalThis.__edgeDb = createDb());
+// The connection is cached across dev hot reloads, so apply the (idempotent)
+// schema again whenever this module reloads: new tables/columns appear
+// without restarting the server.
+if (globalThis.__edgeDb && process.env.NODE_ENV !== "production") {
+  db.exec(SCHEMA);
+  ensureColumns(db);
+}
 
 export function uuid(): string {
   return crypto.randomUUID();

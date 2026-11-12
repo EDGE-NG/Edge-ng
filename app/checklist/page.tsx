@@ -16,8 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import EdgeMark from "../_components/edge-mark";
 import ChecklistCard from "./checklist-card";
 import Composer, { type ComposerHandle } from "./composer";
-import { IconCheck, IconMenu, IconMic, IconPlus, IconRetry } from "./icons";
-import Sidebar from "./sidebar";
+import { IconCheck, IconMic, IconPlus, IconRetry } from "../_components/icons";
+import Sidebar, { MenuButton, useSidebar } from "../_components/sidebar";
 import { PURPOSE_LABEL, type ChatSummaryWithEdge, type ChatView, type Message, type Rule } from "./types";
 
 const EXAMPLES = [
@@ -65,7 +65,7 @@ export default function ChecklistPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sideOpen, setSideOpen] = useState(false);
+  const { open: sideOpen, toggle: toggleSidebar, closeIfMobile } = useSidebar();
 
   const unauthorized = useCallback(async () => {
     // stale cookie: clear it so /login doesn't bounce back here
@@ -84,7 +84,7 @@ export default function ChecklistPage() {
   const openChat = useCallback(
     async (id: string) => {
       setError("");
-      setSideOpen(false);
+      closeIfMobile();
       const res = await fetch(`/api/chats/${id}`);
       if (res.status === 401) return unauthorized();
       if (!res.ok) {
@@ -99,7 +99,7 @@ export default function ChecklistPage() {
       setPending([]);
       window.history.replaceState(null, "", `/checklist?c=${id}`);
     },
-    [unauthorized]
+    [unauthorized, closeIfMobile]
   );
 
   useEffect(() => {
@@ -130,7 +130,7 @@ export default function ChecklistPage() {
     setView(null);
     setPending([]);
     setError("");
-    setSideOpen(false);
+    closeIfMobile();
   }
 
   /** "Create new checklist": open the chat box. */
@@ -263,18 +263,17 @@ export default function ChecklistPage() {
   return (
     <div className="flex h-dvh overflow-hidden">
       <Sidebar
+        active="checklist"
         user={user}
         open={sideOpen}
-        onClose={() => setSideOpen(false)}
+        onClose={() => toggleSidebar(false)}
         onChecklist={goToChecklists}
         onSignOut={signOut}
       />
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4 sm:px-6">
-          <button type="button" className="icon-btn border-transparent md:hidden" onClick={() => setSideOpen(true)} aria-label="Open menu">
-            <IconMenu />
-          </button>
+          <MenuButton open={sideOpen} onOpen={() => toggleSidebar(true)} />
           {mode === "list" ? (
             <h1 className="truncate text-[1.05rem] font-medium tracking-[-0.02em]">Your checklists</h1>
           ) : (
@@ -284,14 +283,17 @@ export default function ChecklistPage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-[#dcff3c]" aria-hidden="true" />
                 {PURPOSE_LABEL[view?.chat.purpose ?? "build_edge"]}
               </span>
-              <h1 className="min-w-0 truncate text-[0.95rem] font-normal tracking-normal text-ink">
-                {view?.draft?.edgeName || view?.chat.title || (mode === "compose" ? "New checklist" : "")}
-              </h1>
+              {mode === "chat" && (
+                <h1 className="min-w-0 truncate text-[0.95rem] font-normal tracking-normal text-ink">
+                  {view?.draft?.edgeName || view?.chat.title || ""}
+                </h1>
+              )}
             </>
           )}
+          {/* Only for traders who already have a checklist; never on a first visit. */}
           {hasChecklist && mode !== "compose" && mode !== "loading" && (
-            <button type="button" onClick={createNew} className="btn btn-sm ml-auto shrink-0 gap-2 border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_12%,transparent)] px-4">
-              <IconPlus className="h-4 w-4 text-accent" />
+            <button type="button" onClick={createNew} className="create-btn ml-auto shrink-0">
+              <IconPlus className="h-3.5 w-3.5" />
               <span>Create new checklist</span>
             </button>
           )}
@@ -339,8 +341,9 @@ export default function ChecklistPage() {
             </div>
           </main>
         ) : mode === "compose" ? (
-          <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10 sm:px-6">
-            <div className="w-full max-w-[720px] fade-up">
+          // my-auto (not justify-center) so a tall welcome never clips its top
+          <main className="flex flex-1 flex-col items-center overflow-y-auto px-4 sm:px-6">
+            <div className="my-auto w-full max-w-[720px] py-10 fade-up">
               <div className="mb-8 flex flex-col items-center text-center">
                 <span className="mb-6 grid h-16 w-16 place-items-center rounded-[20px] border border-[rgba(220,255,60,.35)] bg-[linear-gradient(135deg,rgba(220,255,60,.12),rgba(220,255,60,0))] shadow-[0_0_40px_-8px_rgba(220,255,60,.35)]">
                   <EdgeMark className="h-8 w-10" />

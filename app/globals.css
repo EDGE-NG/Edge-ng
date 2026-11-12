@@ -374,8 +374,13 @@ html[data-theme="light"] .logo-dark {
 }
 
 /* ------------------------------------------------------------------------
- * Chat (the first screen after sign-in, PRD 4.1)
+ * Checklist page (the first screen after sign-in, PRD 4.1)
+ *
+ * In @layer components so Tailwind utilities on the same element win
+ * (e.g. `md:hidden`, `h-8 w-8`). Unlayered CSS beats every layer, which made
+ * the phone-only menu/close buttons show (and do nothing) on desktop.
  * --------------------------------------------------------------------- */
+@layer components {
 .chat-composer {
   border: 1px solid var(--color-line);
   background: var(--color-surface);
@@ -420,6 +425,29 @@ html[data-theme="light"] .logo-dark {
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* Create new checklist: solid primary button, top-right of the Checklist page */
+.create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px 0 11px;
+  border-radius: 999px;
+  border: 0;
+  background: #5ef088;
+  color: #04110a;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 10px 30px -12px rgba(94, 240, 136, 0.6);
+  transition: transform 0.15s, background 0.15s;
+}
+.create-btn:hover {
+  background: #8af7aa;
+  transform: translateY(-1px);
+}
+
 /* Speak: a clearly visible pill (the plain icon-btn grey was too faint) */
 .speak-btn {
   display: inline-flex;
@@ -583,3 +611,4 @@ html[data-theme="light"] .logo-dark {
     transform: translateY(8px);
   }
 }
+} /* end @layer components */

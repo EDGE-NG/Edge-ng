@@ -39,8 +39,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "That recording is too long. Keep voice notes under 3 minutes." }, { status: 413 });
   }
 
+  // Browsers label recordings with codec parameters (Chrome:
+  // "audio/webm;codecs=opus"), which the speech API can reject as an invalid
+  // file. Re-wrap the bytes with a plain media type and a matching extension.
+  const base = (audio.type || "audio/webm").split(";")[0].trim().toLowerCase();
+  const kind =
+    base.includes("mp4") || base.includes("m4a") || base.includes("aac")
+      ? { ext: "m4a", type: "audio/mp4" }
+      : base.includes("ogg")
+        ? { ext: "ogg", type: "audio/ogg" }
+        : base.includes("wav")
+          ? { ext: "wav", type: "audio/wav" }
+          : base.includes("mpeg") || base.includes("mp3")
+            ? { ext: "mp3", type: "audio/mpeg" }
+            : { ext: "webm", type: "audio/webm" };
+  const bytes = await audio.arrayBuffer();
+  const clean = new File([bytes], `voice.${kind.ext}`, { type: kind.type });
+
   const upstream = new FormData();
-  upstream.append("file", audio, audio.name || "voice.webm");
+  upstream.append("file", clean);
   upstream.append("model", MODEL);
   upstream.append("response_format", "verbose_json");
   upstream.append("temperature", "0");
@@ -59,7 +76,12 @@ export async function POST(req: Request) {
     });
     if (!res.ok) {
       const detail = await res.text();
-      console.error("[transcribe] groq", res.status, detail.slice(0, 300));
+      console.error(
+        "[transcribe] groq",
+        res.status,
+        detail.slice(0, 300),
+        `| sent ${clean.name} (${clean.type}, ${bytes.byteLength} bytes; browser said "${audio.type}")`
+      );
       return NextResponse.json(
         { error: "I couldn't transcribe that recording. Try again, or type your plan." },
         { status: 502 }

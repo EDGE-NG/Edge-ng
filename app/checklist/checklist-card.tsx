@@ -7,7 +7,7 @@
  */
 import Link from "next/link";
 import { useState } from "react";
-import { IconCheck, IconLock, IconPencil, IconTrash } from "./icons";
+import { IconCheck, IconLock, IconPencil, IconTrash } from "../_components/icons";
 import { ASSESS_LABEL, CATEGORY_LABEL, CATEGORY_ORDER, type Draft, type Rule } from "./types";
 
 interface LiveProps {
@@ -192,7 +192,7 @@ function Live({ draft, questions, busy, onSave, onApprove, onAnswer, onJudgmentC
             <p className="text-sm text-muted">
               This is your active checklist. Edits from here create v{draft.versionNumber}.
             </p>
-            <Link href="/app/visual" className="btn btn-main btn-sm">
+            <Link href="/app/evidence" className="btn btn-main btn-sm">
               Add chart examples
             </Link>
           </div>

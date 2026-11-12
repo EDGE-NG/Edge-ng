@@ -21,7 +21,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [accept, setAccept] = useState(false);
   const [error, setError] = useState("");
   const [exists, setExists] = useState(false);
-  const [busy, setBusy] = useState<"" | "submit" | "demo">("");
+  const [busy, setBusy] = useState<"" | "submit">("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,19 +58,6 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
     }
   }
 
-  async function demo() {
-    setBusy("demo");
-    setError("");
-    try {
-      const res = await fetch("/api/auth/demo", { method: "POST" });
-      if (!res.ok) throw new Error("Demo sign-in failed");
-      router.push("/checklist");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Demo sign-in failed");
-      setBusy("");
-    }
-  }
 
   return (
     <div className="theme-dark auth-scene flex flex-col">
@@ -220,19 +207,6 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               {signup ? "Sign in" : "Create an account"}
             </Link>
           </p>
-
-          {!signup && (
-            <>
-              <div className="my-5 flex items-center gap-3 text-xs text-muted">
-                <span className="h-px flex-1 bg-hr" />
-                or
-                <span className="h-px flex-1 bg-hr" />
-              </div>
-              <button className="btn w-full" disabled={busy !== ""} onClick={demo}>
-                {busy === "demo" ? "Opening the demo…" : "Explore with demo data"}
-              </button>
-            </>
-          )}
         </section>
 
         <Preview />

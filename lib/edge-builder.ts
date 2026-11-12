@@ -20,6 +20,8 @@ export const MAX_MESSAGE_CHARS = 6000;
 
 export interface Rule {
   id?: string;
+  /** Stable across versions: evidence images attach to (edge, item_key). PRD 9.3/9.4. */
+  item_key?: string;
   category: Category;
   text: string;
   hard_gate: boolean;
@@ -264,6 +266,7 @@ export async function buildFromConversation(args: {
 
 interface ItemRow {
   id: string;
+  item_key: string | null;
   category: string;
   text: string;
   hard_gate: number;
@@ -276,6 +279,7 @@ interface ItemRow {
 function rowToRule(r: ItemRow): Rule {
   return {
     id: r.id,
+    item_key: r.item_key ?? r.id,
     category: asCategory(r.category) ?? "note",
     text: r.text,
     hard_gate: r.hard_gate === 1,
@@ -289,7 +293,7 @@ export function loadItems(versionId: string): Rule[] {
   return (
     db
       .prepare(
-        `SELECT id, category, text, hard_gate, position, source_span, assessability, required_timeframe
+        `SELECT id, item_key, category, text, hard_gate, position, source_span, assessability, required_timeframe
          FROM checklist_items WHERE version_id = ? ORDER BY position`
       )
       .all(versionId) as unknown as ItemRow[]
@@ -338,8 +342,8 @@ export function loadDraft(edgeId: string): DraftState | null {
 }
 
 const INSERT_ITEM = `INSERT INTO checklist_items
-  (id, version_id, category, text, hard_gate, position, notes, source_span, assessability, required_timeframe)
-  VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`;
+  (id, version_id, category, text, hard_gate, position, notes, source_span, assessability, required_timeframe, item_key)
+  VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`;
 
 function insertItems(versionId: string, rules: Rule[]) {
   const ins = db.prepare(INSERT_ITEM);
@@ -353,9 +357,36 @@ function insertItems(versionId: string, rules: Rule[]) {
       i,
       r.source_span,
       r.assessability,
-      r.required_timeframe
+      r.required_timeframe,
+      r.item_key ?? uuid()
     )
   );
+}
+
+/**
+ * A revision from the AI comes back without ids. Give each revised rule the
+ * item_key of the rule it came from (same quoted words, else same wording) so
+ * its evidence images stay attached; genuinely new rules get a new key.
+ */
+function carryKeys(previous: Rule[], next: Rule[]): Rule[] {
+  const used = new Set<string>();
+  const bySpan = new Map<string, string>();
+  const byText = new Map<string, string>();
+  for (const p of previous) {
+    if (!p.item_key) continue;
+    if (p.source_span) bySpan.set(normalize(p.source_span), p.item_key);
+    byText.set(normalize(p.text), p.item_key);
+  }
+  return next.map((r) => {
+    if (r.item_key) return r;
+    const key =
+      (r.source_span && bySpan.get(normalize(r.source_span))) || byText.get(normalize(r.text)) || undefined;
+    if (key && !used.has(key)) {
+      used.add(key);
+      return { ...r, item_key: key };
+    }
+    return r;
+  });
 }
 
 /** Create the edge, its first draft version and the rules. Returns the edge id. */
@@ -386,8 +417,9 @@ export function createEdgeWithDraft(userId: string, name: string, sourceText: st
 export function replaceDraftItems(versionId: string, sourceText: string, rules: Rule[]) {
   db.exec("BEGIN");
   try {
+    const previous = loadItems(versionId);
     db.prepare("DELETE FROM checklist_items WHERE version_id = ?").run(versionId);
-    insertItems(versionId, rules);
+    insertItems(versionId, carryKeys(previous, rules));
     db.prepare("UPDATE edge_versions SET source_text = ? WHERE id = ? AND status = 'draft'").run(
       sourceText,
       versionId
