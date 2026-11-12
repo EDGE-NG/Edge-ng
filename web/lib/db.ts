@@ -367,6 +367,9 @@ function createDb(): DatabaseSync {
   );
   fs.mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(process.env.EDGE_DB_PATH || path.join(dir, "edge.db"));
+  // `next build` runs several workers that open this file at the same moment.
+  // Wait for the lock (up to 10 s) instead of failing with "database is locked".
+  db.exec("PRAGMA busy_timeout = 10000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
