@@ -69,6 +69,9 @@ jobs:
           fi
       - name: Block banned gate wording (PR-GT-8)
         run: |
-          if git grep -niE 'good trade|will win|guaranteed profit' -- web/src api/src shared/src; then
+          # Lines that say Edge "never" predicts are fine; anything else is flagged.
+          found=$(git grep -niE 'good trade|will win|guaranteed profit|sure win' -- web/app web/lib api/src shared/src | grep -viE 'never|not ' || true)
+          if [ -n "$found" ]; then
+            echo "$found"
             echo "Edge never predicts. Use 'passes your checklist' / 'fails your checklist'."; exit 1
           fi

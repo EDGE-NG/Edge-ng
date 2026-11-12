@@ -24,8 +24,7 @@ The full product is described in the PRD: *Edge (edge.ng) Product Requirements D
 Everything is TypeScript.
 
 **Built so far:**
-- The landing page (`web/public/landing.html`), served at `/`. This is the same page as the current live site.
-- App shell with side navigation and a placeholder for each core screen (chat, checklist, evidence library, trade workspace, journal, dashboard, sign-up). Each placeholder names its PRD references and owners.
+- **Frontend (Daniel):** landing page, sign up and sign in, chat-first checklist builder, evidence library, trade workspace with chart and pre-trade gate, journal and settings. It currently runs on its own temporary demo backend inside `web/` (SQLite, Groq/OpenRouter AI, Twelve Data). See [web/README.md](web/README.md).
 - Backend modules for identity, edge, workspace-gate, llm, journal, billing and notifications, plus a `/health` check.
 - The gate's hard-gate roll-up in code (`api/src/workspace-gate/decision-engine.ts`), with tests (REQ-GT-1).
 
@@ -48,13 +47,13 @@ Other commands: `npm test` (backend tests), `npm run build` (build everything), 
 
 Create these files yourself. They are never committed. Ask Sheyi for the values.
 
-**`web/.env.local`**
+**`web/.env.local`**: the frontend's demo settings (AI and market-data keys) are listed in [web/README.md](web/README.md). Ask Daniel for those values. Later, for the main backend:
 ```
 NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
-Only `NEXT_PUBLIC_` values reach the browser, so never put secret keys in this file.
+Only `NEXT_PUBLIC_` values reach the browser, so never put secret keys in them.
 
 **`api/.env`**
 ```
@@ -67,7 +66,6 @@ AI provider keys are added here (server only) once the AI provider is chosen.
 
 ## Known issues on the landing page
 
-- "Get early access" opens an email to `hello@example.com` (a placeholder). It should lead to `/signup` (PRD flow F1).
 - The scrolling slogan does not move: its `tick` animation is never defined in the CSS.
 - Risk notice, Privacy and Terms links point to `#`.
 - Large empty gaps between sections; the hero demo card is cut off on shorter laptop screens.

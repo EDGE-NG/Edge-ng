@@ -37,8 +37,9 @@ Do not start copy trading, broker connections, payments or the marketplace until
 ```
 edge/
 ├── web/                     # Next.js frontend (has its own AGENTS.md: read it)
-│   ├── public/landing.html  # current landing page, served at "/"
-│   └── src/app/(app)/       # app screens: chat, checklist, evidence, workspace, journal, dashboard
+│   ├── app/                 # pages and server routes (app/api/); see web/README.md
+│   ├── lib/                 # temporary demo backend logic (database, AI, market data, gate)
+│   └── content/homepage.html # landing page source
 ├── api/                     # NestJS backend (has its own AGENTS.md: read it)
 │   └── src/                 # one module per PRD area
 ├── shared/                  # TypeScript types shared by web and api (@edge/shared)
@@ -49,7 +50,7 @@ edge/
 
 Backend modules in `api/src/` follow PRD 9.1: `identity`, `edge` (checklists and evidence), `workspace-gate`, `llm` (the LLM gateway), `journal`, `billing`, `notifications`. The hard-gate roll-up already exists in `api/src/workspace-gate/decision-engine.ts` with tests; extend it, don't replace it.
 
-Each screen in `web/src/app/(app)/` is a placeholder that names its PRD references and owners. Replace the placeholder when you build the real screen.
+The frontend in `web/` was built by Daniel and currently includes a **temporary demo backend** (`web/app/api/`, `web/lib/`: SQLite, Groq/OpenRouter, Twelve Data). Keep it working for the demo, but put new long-term backend work in `api/` (Sheyi). The gate roll-up must end up on the server (PR-GT-7).
 
 `web/` and `api/` each have their own `AGENTS.md` with notes on their framework version (Next.js 16, NestJS 12). Both are newer than most AI training data: read those notes and the bundled docs before writing framework code.
 
