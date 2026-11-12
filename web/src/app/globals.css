@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Design tokens taken from the landing page (public/landing.html). */
+:root {
+  --background: #000000;
+  --foreground: #f4f6f5;
+  --muted: #8c958f;
+  --line: rgba(255, 255, 255, 0.09);
+  --accent: #5ef088;
+  --deep: #05231b;
+  --pass: #5be3a0;
+  --fail: #ff7a8a;
+  --maybe: #ffd36b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-deep: var(--deep);
+  --color-pass: var(--pass);
+  --color-fail: var(--fail);
+  --color-maybe: var(--maybe);
+  --font-sans: var(--font-inter-tight);
+  --font-display: var(--font-archivo);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter-tight), system-ui, sans-serif;
+}

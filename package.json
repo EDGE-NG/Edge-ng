@@ -1,0 +1,18 @@
+{
+  "name": "edge",
+  "private": true,
+  "description": "Edge (edge.ng): pre-trade discipline for traders",
+  "workspaces": [
+    "shared",
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "postinstall": "npm run build -w @edge/shared",
+    "dev:web": "npm run dev -w @edge/web",
+    "dev:api": "npm run start:dev -w @edge/api",
+    "build": "npm run build -w @edge/shared && npm run build -w @edge/api && npm run build -w @edge/web",
+    "test": "npm run test -w @edge/api",
+    "lint": "npm run lint -w @edge/api && npm run lint -w @edge/web"
+  }
+}
