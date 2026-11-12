@@ -105,7 +105,11 @@ html[data-motion="reduce"] *::after {
   border-radius: 8px;
 }
 
-/* shared primitives matching the landing page */
+/* shared primitives matching the landing page.
+ * In @layer components so Tailwind utilities on the same element win
+ * (e.g. `w-auto` on an .input, `p-0` on a .card). Unlayered CSS beats every
+ * layer, which made the workspace selects stretch full width. */
+@layer components {
 .btn {
   display: inline-flex;
   align-items: center;
@@ -238,6 +242,7 @@ html[data-theme="light"] .input::placeholder {
 .card .card::before {
   display: none;
 }
+} /* end @layer components (shared primitives) */
 
 /* theme-aware logo: silver wordmark on dark surfaces, ink wordmark on light */
 .logo-dark {

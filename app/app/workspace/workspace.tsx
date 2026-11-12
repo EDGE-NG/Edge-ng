@@ -138,7 +138,12 @@ export default function Workspace() {
       setSymbol(sym);
       setAssetClass(d.instruments.find((i: Instrument) => i.symbol === sym)?.assetClass ?? "crypto");
       setPlatform(v?.session.platform ?? pref.platform ?? "");
-      if (v && v.session.edgeId === e) setView(v);
+      if (v && v.session.edgeId === e) {
+        setView(v);
+        // start on the timeframe the rules ask for first
+        const first = v.rules.find((r) => r.timeframe)?.timeframe;
+        if (first) setTf(first);
+      }
     })();
   }, []);
 
@@ -304,9 +309,9 @@ export default function Workspace() {
 
             {error && <p role="alert" className="mb-3 text-sm text-fail">{error}</p>}
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-              {/* chart */}
-              <section className="card overflow-hidden p-0" aria-label="Chart">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px] xl:items-start">
+              {/* chart: keeps its own height and stays in view while the panel scrolls */}
+              <section className="card overflow-hidden p-0 xl:sticky xl:top-4" aria-label="Chart">
                 <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
                   <span className="font-medium">{inst?.label ?? symbol}</span>
                   {lastPrice != null && inst && <span className="tabular-nums text-ink/80">{lastPrice.toFixed(inst.decimals)}</span>}
@@ -468,8 +473,14 @@ function LivePanel({
                       </button>
                     )}
                   </div>
-                  {r.check && r.mode === "chart" && (r.status === "inconclusive" || r.status === "unchecked") && !isOpen && (
-                    <p className="mt-1 text-xs text-ink/65">{r.check.missing ? `Needs ${r.check.missing}.` : r.check.reasoning}</p>
+                  {r.stale && !isOpen ? (
+                    <p className="mt-1 text-xs text-ink/65">
+                      The last check is over 15 minutes old. {r.timeframe ? `Show the ${TF_LABEL[r.timeframe]} chart` : "Check this view again"} to refresh it.
+                    </p>
+                  ) : (
+                    r.check && r.mode === "chart" && (r.status === "inconclusive" || r.status === "unchecked") && !isOpen && (
+                      <p className="mt-1 text-xs text-ink/65">{r.check.missing ? `Needs ${r.check.missing}.` : r.check.reasoning}</p>
+                    )
                   )}
                   {isOpen && r.check && (
                     <div className="mt-2 space-y-1.5 rounded-xl bg-panel px-3 py-2.5 text-sm">
@@ -626,6 +637,7 @@ function TicketPanel({
         <DecisionCard
           decision={decision}
           decimals={inst.decimals}
+          currentTf={tf}
           onClose={() => setDecision(null)}
           onShowTf={(t) => {
             setDecision(null);
@@ -641,12 +653,14 @@ function TicketPanel({
 function DecisionCard({
   decision,
   decimals,
+  currentTf,
   onClose,
   onShowTf,
   onResolved,
 }: {
   decision: Decision;
   decimals: number;
+  currentTf: Timeframe;
   onClose: () => void;
   onShowTf: (t: Timeframe) => void;
   onResolved: (r: string) => void;
@@ -718,13 +732,20 @@ function DecisionCard({
           <li key={f.itemKey}>
             <span className="text-maybe">? {f.text}</span>
             <span className="block text-ink/70">{f.reason}</span>
-            {f.timeframe && f.mode === "chart" && (
-              <button className="chip-btn mt-1 py-1 text-xs" onClick={() => {
-                const map: Record<string, Timeframe> = { "4h": "4h", "1h": "1h", "15m": "15m", "5m": "5m", "1m": "1m", "30m": "30m", "1d": "1d" };
-                const k = f.timeframe!.toLowerCase().replace(/\s/g, "");
-                const tf = map[k] ?? (k === "daily" || k === "d" ? "1d" : null);
-                if (tf) onShowTf(tf);
-              }}>Show the {f.timeframe} chart</button>
+            {(() => {
+              // only offer a view switch when a different view would actually help
+              if (!f.timeframe || f.mode !== "chart" || /example/i.test(f.reason)) return null;
+              const k = f.timeframe.toLowerCase().replace(/\s/g, "");
+              const tf = (TIMEFRAMES as string[]).includes(k) ? (k as Timeframe) : k === "daily" || k === "d" ? "1d" : null;
+              if (!tf || tf === currentTf) return null;
+              return (
+                <button className="chip-btn mt-1 py-1 text-xs" onClick={() => onShowTf(tf)}>
+                  Show the {f.timeframe} chart
+                </button>
+              );
+            })()}
+            {/example/i.test(f.reason) && (
+              <Link href="/app/evidence" className="chip-btn mt-1 py-1 text-xs">Add an example</Link>
             )}
           </li>
         ))}
