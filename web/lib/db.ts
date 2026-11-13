@@ -360,6 +360,17 @@ function ensureColumns(database: DatabaseSync): void {
 }
 
 function createDb(): DatabaseSync {
+  // `next build` loads the API routes in several workers at once. Each opening the
+  // same file made builds fail at random with "database is locked", and a build
+  // never needs real data, so each build worker gets its own in-memory database.
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    const buildDb = new DatabaseSync(":memory:");
+    buildDb.exec("PRAGMA foreign_keys = ON;");
+    buildDb.exec(SCHEMA);
+    ensureColumns(buildDb);
+    return buildDb;
+  }
+
   // The DB must live OUTSIDE the project tree: Turbopack watches the project,
   // and SQLite's WAL writes would trigger a Fast Refresh reload loop.
   const dir = path.dirname(
@@ -367,8 +378,7 @@ function createDb(): DatabaseSync {
   );
   fs.mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(process.env.EDGE_DB_PATH || path.join(dir, "edge.db"));
-  // `next build` runs several workers that open this file at the same moment.
-  // Wait for the lock (up to 10 s) instead of failing with "database is locked".
+  // Wait for a lock (up to 10 s) instead of failing straight away.
   db.exec("PRAGMA busy_timeout = 10000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
