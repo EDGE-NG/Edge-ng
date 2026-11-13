@@ -89,6 +89,7 @@ Check which area your human owns before editing. Do not change another person's 
 - Branch per task, named `yourname/short-description`. Never commit straight to `main`.
 - Stage files by name (`git add path/to/file`), never `git add .` or `git add -A`.
 - Never commit secrets or `.env` files. Add new variable names to `.env.example` with no values.
+- Don't add AI co-author lines (e.g. `Co-Authored-By: Claude ...`) or "Generated with" text to commits or pull requests. Claude Code users: set `"includeCoAuthoredBy": false` in `~/.claude/settings.json`.
 - Put types used by both frontend and backend in `shared/`; don't duplicate them.
 - Mention the PRD IDs you worked on in commit messages and pull requests, e.g. `Add checklist approval (PR-CL-3)`.
 - Open a pull request and ask Sheyi or Daniel to review before merging.
