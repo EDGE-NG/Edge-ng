@@ -10,12 +10,10 @@
  * - Nothing is used until the trader confirms Edge's reading (PR-EV-3).
  */
 import { createHash, randomUUID } from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { chatJson } from "./ai";
-import { db, now } from "./db";
+import { db, json, uuid } from "./db";
 import { loadItems, type Rule } from "./edge-builder";
+import { getObject, putObject, removeObject, type Bucket } from "./supabase";
 
 export const MAX_IMAGES_PER_RULE = 6;
 export const MAX_BYTES = 10 * 1024 * 1024;
@@ -24,9 +22,6 @@ export const MIN_HEIGHT = 250;
 
 /** Statuses that count toward the 6-image limit and show in the library. */
 export const ACTIVE = ["uploaded", "interpreted", "confirmed"] as const;
-
-const STORE =
-  process.env.EDGE_EVIDENCE_DIR || path.join(os.tmpdir(), "edge-fe", "evidence");
 
 /* ------------------------------------------------------------ images ----- */
 
@@ -127,23 +122,24 @@ export function stripMetadata(b: Buffer, mime: Mime): Buffer {
 
 const EXT: Record<Mime, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
-export function saveFile(userId: string, id: string, mime: Mime, data: Buffer): string {
-  const key = `${userId}/${id}.${EXT[mime]}`; // namespaced by user (PRD 9.5)
-  const full = path.join(STORE, key);
-  fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, data);
+/**
+ * Store a file in a private Supabase Storage bucket. Keys are namespaced by
+ * user (PRD 9.5): "<user_id>/<file>". Returns the object key.
+ */
+export async function saveFile(userId: string, id: string, mime: Mime, data: Buffer, bucket: Bucket = "evidence"): Promise<string> {
+  const key = `${userId}/${id}.${EXT[mime]}`;
+  await putObject(bucket, key, data, mime);
   return key;
 }
 
-export function readFile(objectKey: string): Buffer {
-  const full = path.resolve(STORE, objectKey);
-  if (!full.startsWith(path.resolve(STORE) + path.sep)) throw new Error("bad key");
-  return fs.readFileSync(full);
+export async function readFile(objectKey: string, bucket: Bucket = "evidence"): Promise<Buffer> {
+  if (objectKey.includes("..")) throw new Error("bad key");
+  return getObject(bucket, objectKey);
 }
 
-export function deleteFile(objectKey: string) {
+export async function deleteFile(objectKey: string, bucket: Bucket = "evidence"): Promise<void> {
   try {
-    fs.unlinkSync(path.resolve(STORE, objectKey));
+    await removeObject(bucket, objectKey);
   } catch {
     /* already gone */
   }
@@ -271,6 +267,8 @@ export async function readImage(args: {
 }
 
 /* ----------------------------------------------------------- queries ----- */
+// Table: evidence_images, attached to (checklist_id, item_key). "edge" in this
+// code is a checklist.
 
 export interface EvidenceImage {
   id: string;
@@ -296,19 +294,13 @@ interface ImageRow {
   height: number | null;
   trader_note: string | null;
   interpretation_text: string | null;
-  interpretation_json: string | null;
+  interpretation_json: unknown;
   interpretation_confirmed_at: string | null;
-  corrected: number;
+  corrected: boolean;
   created_at: string;
 }
 
 export function toImage(r: ImageRow): EvidenceImage {
-  let reading: Reading | null = null;
-  try {
-    reading = r.interpretation_json ? (JSON.parse(r.interpretation_json) as Reading) : null;
-  } catch {
-    reading = null;
-  }
   return {
     id: r.id,
     item_key: r.item_key,
@@ -318,9 +310,9 @@ export function toImage(r: ImageRow): EvidenceImage {
     height: r.height,
     trader_note: r.trader_note,
     interpretation_text: r.interpretation_text,
-    reading,
+    reading: json<Reading | null>(r.interpretation_json, null),
     confirmed: r.status === "confirmed",
-    corrected: r.corrected === 1,
+    corrected: r.corrected === true,
     created_at: r.created_at,
   };
 }
@@ -328,38 +320,39 @@ export function toImage(r: ImageRow): EvidenceImage {
 const IMAGE_COLS = `id, item_key, polarity, status, width, height, trader_note, interpretation_text,
   interpretation_json, interpretation_confirmed_at, corrected, created_at`;
 
-export function activeImages(edgeId: string, itemKey?: string): EvidenceImage[] {
-  const rows = (
-    itemKey
-      ? db
-          .prepare(
-            `SELECT ${IMAGE_COLS} FROM evidence_images
-             WHERE edge_id = ? AND item_key = ? AND status IN ('uploaded','interpreted','confirmed')
-             ORDER BY created_at`
-          )
-          .all(edgeId, itemKey)
-      : db
-          .prepare(
-            `SELECT ${IMAGE_COLS} FROM evidence_images
-             WHERE edge_id = ? AND status IN ('uploaded','interpreted','confirmed')
-             ORDER BY created_at`
-          )
-          .all(edgeId)
-  ) as unknown as ImageRow[];
+export async function activeImages(edgeId: string, itemKey?: string): Promise<EvidenceImage[]> {
+  const rows = itemKey
+    ? await db.all<ImageRow>(
+        `SELECT ${IMAGE_COLS} FROM evidence_images
+         WHERE checklist_id = ? AND item_key = ? AND status IN ('uploaded','interpreted','confirmed')
+         ORDER BY created_at`,
+        edgeId,
+        itemKey
+      )
+    : await db.all<ImageRow>(
+        `SELECT ${IMAGE_COLS} FROM evidence_images
+         WHERE checklist_id = ? AND status IN ('uploaded','interpreted','confirmed')
+         ORDER BY created_at`,
+        edgeId
+      );
   return rows.map(toImage);
 }
 
-export function getImage(id: string, userId: string) {
-  return db
-    .prepare(`SELECT ${IMAGE_COLS}, edge_id, object_key, mime_type FROM evidence_images WHERE id = ? AND user_id = ?`)
-    .get(id, userId) as unknown as (ImageRow & { edge_id: string; object_key: string; mime_type: Mime }) | undefined;
+export async function getImage(id: string, userId: string) {
+  return db.one<ImageRow & { edge_id: string; object_key: string; mime_type: Mime }>(
+    `SELECT ${IMAGE_COLS}, checklist_id AS edge_id, object_key, mime_type
+     FROM evidence_images WHERE id = ? AND user_id = ?`,
+    id,
+    userId
+  );
 }
 
 /** The trader's approved checklist for an edge (evidence follows the active version). */
-export function activeRules(edgeId: string): Rule[] {
-  const edge = db.prepare("SELECT active_version_id FROM edges WHERE id = ?").get(edgeId) as
-    | { active_version_id: string | null }
-    | undefined;
+export async function activeRules(edgeId: string): Promise<Rule[]> {
+  const edge = await db.one<{ active_version_id: string | null }>(
+    "SELECT active_version_id FROM checklists WHERE id = ?",
+    edgeId
+  );
   return edge?.active_version_id ? loadItems(edge.active_version_id) : [];
 }
 
@@ -393,33 +386,55 @@ export function coverageOf(images: EvidenceImage[]): Coverage {
 
 /**
  * Rebuild the rule card from the confirmed images (PRD 5.3). Deterministic:
- * the confirmed readings are the trader-approved descriptions already.
+ * the confirmed readings are the trader-approved descriptions already. Each
+ * rebuild is stored as a new card version, so past decisions keep theirs.
  */
-export function rebuildRuleCard(edgeId: string, itemKey: string) {
-  const imgs = activeImages(edgeId, itemKey).filter((i) => i.confirmed);
+export async function rebuildRuleCard(edgeId: string, itemKey: string): Promise<void> {
+  const imgs = (await activeImages(edgeId, itemKey)).filter((i) => i.confirmed);
   const sum = (pol: "valid" | "invalid") =>
     imgs
       .filter((i) => i.polarity === pol)
       .map((i) => `- ${i.interpretation_text ?? i.reading?.reading ?? ""}`)
       .join("\n") || null;
-  const prev = db
-    .prepare("SELECT card_version FROM rule_cards WHERE edge_id = ? AND item_key = ?")
-    .get(edgeId, itemKey) as { card_version: number } | undefined;
-  db.prepare(
-    `INSERT INTO rule_cards (edge_id, item_key, card_version, valid_summary, invalid_summary, coverage_json, source_image_ids, built_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(edge_id, item_key) DO UPDATE SET
-       card_version = excluded.card_version, valid_summary = excluded.valid_summary,
-       invalid_summary = excluded.invalid_summary, coverage_json = excluded.coverage_json,
-       source_image_ids = excluded.source_image_ids, built_at = excluded.built_at`
-  ).run(
-    edgeId,
-    itemKey,
-    (prev?.card_version ?? 0) + 1,
-    sum("valid"),
-    sum("invalid"),
-    JSON.stringify(coverageOf(imgs)),
-    JSON.stringify(imgs.map((i) => i.id)),
-    now()
+  await db.tx(async (t) => {
+    const owner = await t.one<{ user_id: string }>("SELECT user_id FROM checklists WHERE id = ?", edgeId);
+    if (!owner) return;
+    const prev = await t.one<{ v: number | null }>(
+      "SELECT MAX(card_version) AS v FROM rule_cards WHERE checklist_id = ? AND item_key = ?",
+      edgeId,
+      itemKey
+    );
+    await t.run(
+      `INSERT INTO rule_cards (id, user_id, checklist_id, item_key, card_version, valid_summary, invalid_summary, coverage, source_image_ids)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      uuid(),
+      owner.user_id,
+      edgeId,
+      itemKey,
+      (prev?.v ?? 0) + 1,
+      sum("valid"),
+      sum("invalid"),
+      coverageOf(imgs),
+      imgs.map((i) => i.id)
+    );
+  });
+}
+
+/**
+ * The next free slot (1 to 6) for a rule's active images. The database also
+ * enforces the limit (supabase/migrations/0001_core_loop.sql).
+ */
+export async function freeSlot(conn: { all: typeof db.all }, edgeId: string, itemKey: string): Promise<number | null> {
+  const used = new Set(
+    (
+      await conn.all<{ slot: number }>(
+        `SELECT slot FROM evidence_images
+         WHERE checklist_id = ? AND item_key = ? AND status IN ('uploaded','interpreted','confirmed')`,
+        edgeId,
+        itemKey
+      )
+    ).map((r) => r.slot)
   );
+  for (let s = 1; s <= MAX_IMAGES_PER_RULE; s++) if (!used.has(s)) return s;
+  return null;
 }

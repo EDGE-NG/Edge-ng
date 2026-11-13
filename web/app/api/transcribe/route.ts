@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser, tooManyAttempts } from "@/lib/auth";
-import { db, now, uuid } from "@/lib/db";
+import { recordRun } from "@/lib/ai";
 
 const MAX_BYTES = 20 * 1024 * 1024; // Groq's limit is 25 MB; keep headroom
 const MODEL = process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo";
@@ -93,14 +93,8 @@ export async function POST(req: Request) {
     const lowConfidence = segments.some(
       (s) => (s.avg_logprob ?? 0) < -0.7 || (s.no_speech_prob ?? 0) > 0.5
     );
-    try {
-      db.prepare(
-        `INSERT INTO ai_usage_ledger (id, user_id, feature, provider, model, tokens_in, tokens_out, created_at)
-         VALUES (?, ?, 'transcribe', 'groq', ?, ?, NULL, ?)`
-      ).run(uuid(), user.id, MODEL, Math.round(data.duration ?? 0), now());
-    } catch {
-      /* usage logging never breaks the flow */
-    }
+    // tokens_in holds the audio length in seconds for speech-to-text runs
+    await recordRun({ userId: user.id, job: "transcribe", provider: "groq", model: MODEL, tokensIn: Math.round(data.duration ?? 0) });
     if (!/\p{L}/u.test(text)) {
       // empty, or only punctuation (what silence / background noise comes back as)
       return NextResponse.json({ error: "I didn't catch any words. Try again a little closer to the mic." }, { status: 422 });

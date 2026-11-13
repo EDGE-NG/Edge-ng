@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser, tooManyAttempts } from "@/lib/auth";
-import { db, now } from "@/lib/db";
+import { db } from "@/lib/db";
 import {
   MAX_BYTES,
   MAX_IMAGES_PER_RULE,
@@ -10,6 +10,7 @@ import {
   activeRules,
   coverageOf,
   deleteFile,
+  freeSlot,
   getImage,
   needsImages,
   newId,
@@ -30,18 +31,19 @@ export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const edges = db
-    .prepare(
-      `SELECT e.id, e.name, v.version_number,
-              (SELECT c.id FROM chats c WHERE c.edge_id = e.id ORDER BY c.updated_at DESC LIMIT 1) AS chat_id
-       FROM edges e JOIN edge_versions v ON v.id = e.active_version_id
-       WHERE e.user_id = ? ORDER BY e.updated_at DESC`
-    )
-    .all(user.id) as Array<{ id: string; name: string; version_number: number; chat_id: string | null }>;
+  const edges = await db.all<{ id: string; name: string; version_number: number; chat_id: string | null }>(
+    `SELECT e.id, e.name, v.version_number,
+            (SELECT c.id FROM chats c WHERE c.checklist_id = e.id AND c.deleted_at IS NULL
+             ORDER BY c.updated_at DESC LIMIT 1) AS chat_id
+     FROM checklists e JOIN checklist_versions v ON v.id = e.active_version_id
+     WHERE e.user_id = ? AND e.deleted_at IS NULL ORDER BY e.updated_at DESC`,
+    user.id
+  );
 
-  const checklists = edges.map((e) => {
-    const images = activeImages(e.id);
-    const rules = activeRules(e.id).map((r) => {
+  const checklists = [];
+  for (const e of edges) {
+    const images = await activeImages(e.id);
+    const rules = (await activeRules(e.id)).map((r) => {
       const imgs = images.filter((i) => i.item_key === r.item_key);
       const chart = needsImages(r);
       return {
@@ -52,8 +54,8 @@ export async function GET() {
         ready: !chart || imgs.some((i) => i.confirmed),
       };
     });
-    return { edgeId: e.id, name: e.name, versionNumber: e.version_number, chatId: e.chat_id, rules };
-  });
+    checklists.push({ edgeId: e.id, name: e.name, versionNumber: e.version_number, chatId: e.chat_id, rules });
+  }
   return NextResponse.json({ checklists, limits: { maxPerRule: MAX_IMAGES_PER_RULE, maxBytes: MAX_BYTES } });
 }
 
@@ -81,17 +83,17 @@ export async function POST(req: Request) {
   if (polarity !== "valid" && polarity !== "invalid") {
     return NextResponse.json({ error: "Mark the image as a valid or an invalid example." }, { status: 400 });
   }
-  const edge = db.prepare("SELECT id FROM edges WHERE id = ? AND user_id = ?").get(edgeId, user.id);
+  const edge = await db.one("SELECT id FROM checklists WHERE id = ? AND user_id = ?", edgeId, user.id);
   if (!edge) return NextResponse.json({ error: "Checklist not found." }, { status: 404 });
-  const rule = activeRules(edgeId).find((r) => r.item_key === itemKey);
+  const rule = (await activeRules(edgeId)).find((r) => r.item_key === itemKey);
   if (!rule) return NextResponse.json({ error: "That rule isn't in your active checklist." }, { status: 404 });
 
-  const replacing = replaceId ? getImage(replaceId, user.id) : undefined;
+  const replacing = replaceId ? await getImage(replaceId, user.id) : undefined;
   if (replaceId && (!replacing || replacing.item_key !== itemKey || replacing.edge_id !== edgeId)) {
     return NextResponse.json({ error: "The image you're replacing wasn't found." }, { status: 404 });
   }
   // EC-V2: a seventh image is blocked; replacing one of the six is fine.
-  if (!replacing && activeImages(edgeId, itemKey).length >= MAX_IMAGES_PER_RULE) {
+  if (!replacing && (await activeImages(edgeId, itemKey)).length >= MAX_IMAGES_PER_RULE) {
     return NextResponse.json(
       { error: `This rule already has ${MAX_IMAGES_PER_RULE} images, the most allowed. Replace one instead.`, code: "limit" },
       { status: 409 }
@@ -117,12 +119,13 @@ export async function POST(req: Request) {
   }
   const clean = stripMetadata(raw, info.mime);
   const hash = sha256(clean);
-  const dupe = db
-    .prepare(
-      `SELECT id FROM evidence_images WHERE edge_id = ? AND item_key = ? AND sha256 = ?
-       AND status IN ('uploaded','interpreted','confirmed')`
-    )
-    .get(edgeId, itemKey, hash);
+  const dupe = await db.one(
+    `SELECT id FROM evidence_images WHERE checklist_id = ? AND item_key = ? AND sha256 = ?
+     AND status IN ('uploaded','interpreted','confirmed')`,
+    edgeId,
+    itemKey,
+    hash
+  );
   if (dupe) return NextResponse.json({ error: "You've already added this exact image to this rule." }, { status: 409 });
 
   // Edge reads the image first, so obvious non-charts are never stored (EC-V4).
@@ -144,43 +147,49 @@ export async function POST(req: Request) {
   }
 
   const id = newId();
-  const objectKey = saveFile(user.id, id, info.mime, clean);
-  const ts = now();
-  db.exec("BEGIN");
+  const objectKey = await saveFile(user.id, id, info.mime, clean);
   try {
-    db.prepare(
-      `INSERT INTO evidence_images (id, user_id, edge_id, item_key, polarity, status, object_key, mime_type, bytes,
-         width, height, sha256, trader_note, interpretation_text, interpretation_json, supersedes_id, created_at)
-       VALUES (?, ?, ?, ?, ?, 'interpreted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id,
-      user.id,
-      edgeId,
-      itemKey,
-      polarity,
-      objectKey,
-      info.mime,
-      clean.length,
-      info.width,
-      info.height,
-      hash,
-      note,
-      [reading.reading, reading.why].filter(Boolean).join(" "),
-      JSON.stringify(reading),
-      replacing?.id ?? null,
-      ts
-    );
-    if (replacing) {
-      // PR-EV-6: the old image is kept (past decisions still point at it)
-      db.prepare("UPDATE evidence_images SET status = 'replaced', archived_at = ? WHERE id = ?").run(ts, replacing.id);
-    }
-    db.exec("COMMIT");
+    await db.tx(async (t) => {
+      if (replacing) {
+        // PR-EV-6: the old image is kept (past decisions still point at it).
+        // It is retired first so the new one can take its slot (max 6 active).
+        await t.run("UPDATE evidence_images SET status = 'replaced', archived_at = now() WHERE id = ?", replacing.id);
+      }
+      const slot = await freeSlot(t, edgeId, itemKey);
+      if (slot === null) throw new Error("no_free_slot");
+      await t.run(
+        `INSERT INTO evidence_images (id, user_id, checklist_id, item_key, slot, polarity, status, object_key, mime_type,
+           bytes, width, height, sha256, trader_note, interpretation_text, interpretation_json, supersedes_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'interpreted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        user.id,
+        edgeId,
+        itemKey,
+        slot,
+        polarity,
+        objectKey,
+        info.mime,
+        clean.length,
+        info.width,
+        info.height,
+        hash,
+        note,
+        [reading.reading, reading.why].filter(Boolean).join(" "),
+        reading,
+        replacing?.id ?? null
+      );
+    });
   } catch (err) {
-    db.exec("ROLLBACK");
-    deleteFile(objectKey);
+    await deleteFile(objectKey);
+    if (err instanceof Error && (err.message === "no_free_slot" || /at most 6 evidence images/.test(err.message))) {
+      return NextResponse.json(
+        { error: `This rule already has ${MAX_IMAGES_PER_RULE} images, the most allowed. Replace one instead.`, code: "limit" },
+        { status: 409 }
+      );
+    }
     throw err;
   }
 
-  const row = getImage(id, user.id)!;
+  const row = (await getImage(id, user.id))!;
   return NextResponse.json({ image: toImage(row) }, { status: 201 });
 }

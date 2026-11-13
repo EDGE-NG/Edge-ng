@@ -38,7 +38,7 @@ Do not start copy trading, broker connections, payments or the marketplace until
 edge/
 ├── web/                     # Next.js frontend (has its own AGENTS.md: read it)
 │   ├── app/                 # pages and server routes (app/api/); see web/README.md
-│   ├── lib/                 # temporary demo backend logic (database, AI, market data, gate)
+│   ├── lib/                 # server logic: Supabase access, AI, market data, gate
 │   └── content/homepage.html # landing page source
 ├── api/                     # NestJS backend (has its own AGENTS.md: read it)
 │   └── src/                 # one module per PRD area
@@ -50,7 +50,15 @@ edge/
 
 Backend modules in `api/src/` follow PRD 9.1: `identity`, `edge` (checklists and evidence), `workspace-gate`, `llm` (the LLM gateway), `journal`, `billing`, `notifications`. The hard-gate roll-up already exists in `api/src/workspace-gate/decision-engine.ts` with tests; extend it, don't replace it.
 
-The frontend in `web/` was built by Daniel and currently includes a **temporary demo backend** (`web/app/api/`, `web/lib/`: SQLite, Groq/OpenRouter, Twelve Data). Keep it working for the demo, but put new long-term backend work in `api/` (Sheyi). The gate roll-up must end up on the server (PR-GT-7).
+The frontend in `web/` was built by Daniel. Its server routes (`web/app/api/`, `web/lib/`) store data in **Supabase**: Auth for accounts, Postgres tables from `supabase/migrations/`, private Storage buckets `evidence` and `frames`. Rules for that code:
+
+- Use `db.one / db.all / db.run / db.tx` from `web/lib/db.ts`. **Every query must filter by the signed-in user's id**: the server connection bypasses row-level security.
+- For json/jsonb columns pass objects, not `JSON.stringify(...)`.
+- Database changes go in a **new** migration file (`supabase/migrations/000N_*.sql`), never an edit to an applied one, and only Sheyi writes them.
+- The database enforces PRD rules itself (immutable approved versions, max 6 images per rule, gate integrity, append-only decisions). If an insert or update is refused, fix the code, not the rule.
+- Test locally with `npx supabase start` (Docker) before opening a PR.
+
+Long-term backend work still goes in `api/` (Sheyi).
 
 `web/` and `api/` each have their own `AGENTS.md` with notes on their framework version (Next.js 16, NestJS 12). Both are newer than most AI training data: read those notes and the bundled docs before writing framework code.
 

@@ -21,6 +21,10 @@ Rules enforced by the database itself:
 - Deleting an account purges all its data (flow F13); the audit log is kept.
 - `checklist_version_gate_ready(version_id)` says whether a version can be used at the gate (every non-manual rule has a confirmed image).
 
+## What `0002_web_app_fields.sql` adds
+
+Additive only (nothing dropped or renamed), for the web app moving off its temporary SQLite file: profile settings, chat message kinds and payloads, Edge's structured image readings, the candles behind each chart frame, ticket fields (account size, risk amount and percent), the decision's reference price, "placed" as a Phase 1 outcome, and "transcribe" as an AI job. It also lets an overridden decision be marked placed or cancelled, and lets a trader override a "needs evidence" decision as well as a denial (PRD F6: when Edge can't check, the trader can still proceed and it's recorded).
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.

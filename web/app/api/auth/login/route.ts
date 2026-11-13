@@ -1,18 +1,11 @@
 import { NextResponse } from "next/server";
-import { db, now } from "@/lib/db";
-import {
-  SESSION_COOKIE,
-  clearAttempts,
-  createSession,
-  getDummyHash,
-  sessionCookie,
-  tooManyAttempts,
-  verifyPassword,
-} from "@/lib/auth";
+import { clearAttempts, tooManyAttempts } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { authClient } from "@/lib/supabase";
 
 const NEUTRAL = "That email and password don't match. Check them and try again.";
 
-/** POST { email, password } -> sign in with a password (PRD F1, REQ-ID-1). */
+/** POST { email, password } -> sign in with Supabase Auth (PRD F1, REQ-ID-1). */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
   const email = String(body.email ?? "").trim().toLowerCase();
@@ -29,23 +22,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Enter your email and password." }, { status: 400 });
   }
 
-  const user = db
-    .prepare("SELECT id, email, name, password_hash FROM users WHERE email = ?")
-    .get(email) as
-    | { id: string; email: string; name: string | null; password_hash: string | null }
-    | undefined;
-
-  // Always run a hash comparison so response time doesn't reveal whether the
-  // email exists (no account enumeration, PRD EC-A1/A3).
-  const ok = await verifyPassword(password, user?.password_hash ?? (await getDummyHash()));
-  if (!user || !user.password_hash || !ok) {
+  const supabase = await authClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) {
+    if (error?.code === "email_not_confirmed") {
+      return NextResponse.json(
+        { error: "Confirm your email first: open the link we sent you, then sign in.", code: "unconfirmed" },
+        { status: 403 }
+      );
+    }
+    // Same reply whether or not the email exists (no account enumeration, EC-A1/A3).
     return NextResponse.json({ error: NEUTRAL }, { status: 401 });
   }
 
   clearAttempts(`login:${email}`);
-  db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?").run(now(), user.id);
-  const token = createSession(user.id);
-  const res = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name } });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookie);
-  return res;
+  const p = await db.one<{ display_name: string | null }>(
+    "SELECT display_name FROM profiles WHERE user_id = ?",
+    data.user.id
+  );
+  return NextResponse.json({ user: { id: data.user.id, email: data.user.email, name: p?.display_name ?? null } });
 }
