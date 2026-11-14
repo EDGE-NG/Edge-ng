@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { id } = await params;
-  const s = getSession(id, user.id);
+  const s = await getSession(id, user.id);
   if (!s) return NextResponse.json({ error: "This workspace session has ended. Pick the instrument again." }, { status: 404 });
 
   const body = (await req.json().catch(() => ({}))) as {
@@ -40,7 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       visibleFrom: Number(body.visibleFrom) || undefined,
       visibleTo: Number(body.visibleTo) || undefined,
     });
-    return NextResponse.json({ ...sessionView(s), frame: r });
+    return NextResponse.json({ ...(await sessionView(s)), frame: r });
   } catch (err) {
     if (err instanceof MarketError) {
       return NextResponse.json({ error: err.message, code: err.code }, { status: err.status });

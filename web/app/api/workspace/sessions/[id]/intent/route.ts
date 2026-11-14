@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
-import { db, now, uuid } from "@/lib/db";
+import { db, json, uuid } from "@/lib/db";
 import { MarketError, TIMEFRAMES, findInstrument, getCandles, type Timeframe } from "@/lib/market";
 import {
   APPROVAL_SECONDS,
@@ -32,19 +32,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { id } = await params;
-  const s = getSession(id, user.id);
+  const s = await getSession(id, user.id);
   if (!s) return NextResponse.json({ error: "This workspace session has ended. Pick the instrument again." }, { status: 404 });
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const key = typeof b.idempotencyKey === "string" ? b.idempotencyKey.slice(0, 80) : null;
   if (key) {
-    const prior = db
-      .prepare(
-        `SELECT d.id FROM trade_intents i JOIN gate_decisions d ON d.intent_id = i.id
-         WHERE i.idempotency_key = ? AND i.user_id = ?`
-      )
-      .get(key, user.id) as { id: string } | undefined;
-    if (prior) return NextResponse.json({ decisionId: prior.id, duplicate: true, ...decisionView(prior.id) });
+    const prior = await db.one<{ id: string }>(
+      `SELECT d.id FROM trade_intents i JOIN gate_decisions d ON d.intent_id = i.id
+       WHERE i.idempotency_key = ? AND i.user_id = ?`,
+      key,
+      user.id
+    );
+    if (prior) return NextResponse.json({ decisionId: prior.id, duplicate: true, ...(await decisionView(prior.id)) });
   }
 
   const side = b.side === "sell" ? "sell" : b.side === "buy" ? "buy" : null;
@@ -83,13 +83,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     lastPrice = ticket.entry;
   }
 
-  const { rules, risk } = sessionRules(s);
-  const today = tradesToday(user.id);
+  const { rules, risk } = await sessionRules(s);
+  const today = await tradesToday(user.id);
   const codeChecks = new Map<string, Check>();
   for (const r of rules) {
     if (ruleMode(r, risk) === "code") codeChecks.set(r.item_key!, evaluateRiskRule(r, risk, ticket, today));
   }
-  const states = ruleStates(s, codeChecks);
+  const states = await ruleStates(s, codeChecks);
   const roll = rollUp(states);
   const m = ticketMath(ticket);
 
@@ -111,73 +111,82 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     softFails: roll.softFails.map((st) => ({ itemKey: st.rule.item_key, text: st.rule.text, reason: reasonFor(st) })),
   };
 
+  // Stored for the database's gate-integrity rule (PRD 9.5): approved only
+  // when every hard gate passed; a failed hard gate is always denied.
+  const hardGateStatus = result === "approved" ? "passed" : result === "denied" ? "failed" : "unresolved";
+
   const intentId = uuid();
   const decisionId = uuid();
-  const ts = now();
-  db.exec("BEGIN");
   try {
-    db.prepare(
-      `INSERT INTO trade_intents (id, user_id, session_id, instrument, side, entry_price, stop_price, target_price,
-         account_size, risk_amount, risk_pct, risk_reward, status, idempotency_key, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'decided', ?, ?)`
-    ).run(
-      intentId,
-      user.id,
-      s.id,
-      s.instrument,
-      side,
-      ticket.entry,
-      ticket.stop,
-      ticket.target,
-      ticket.accountSize,
-      ticket.riskAmount,
-      m.riskPct,
-      m.rr,
-      key,
-      ts
-    );
-    db.prepare(
-      `INSERT INTO gate_decisions (id, intent_id, checklist_version_id, result, reasons_json, snapshot_json,
-         reference_price, price_tolerance, valid_until, decided_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      decisionId,
-      intentId,
-      s.checklist_version_id,
-      result,
-      JSON.stringify(reasons),
-      JSON.stringify({
-        ticket,
-        timeframe: tf,
+    await db.tx(async (t) => {
+      await t.run(
+        `INSERT INTO trade_intents (id, user_id, session_id, instrument, side, entry_price, stop_price, target_price,
+           account_size, risk_amount, risk_pct, risk_reward, status, idempotency_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'decided', ?)`,
+        intentId,
+        user.id,
+        s.id,
+        s.instrument,
+        side,
+        ticket.entry,
+        ticket.stop,
+        ticket.target,
+        ticket.accountSize,
+        ticket.riskAmount,
+        m.riskPct,
+        m.rr,
+        key
+      );
+      await t.run(
+        `INSERT INTO gate_decisions (id, user_id, intent_id, checklist_version_id, result, hard_gate_status, reasons,
+           snapshot, reference_price, price_tolerance, valid_until)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        decisionId,
+        user.id,
+        intentId,
+        s.checklist_version_id,
+        result,
+        hardGateStatus,
+        reasons,
+        {
+          ticket,
+          timeframe: tf,
+          lastPrice,
+          risk,
+          rules: states.map((st) => ({ rule: st.rule, mode: st.mode, status: st.status, check: st.check })),
+          decidedBy: "code",
+        },
         lastPrice,
-        risk,
-        rules: states.map((st) => ({ rule: st.rule, mode: st.mode, status: st.status, check: st.check })),
-        decidedBy: "code",
-      }),
-      lastPrice,
-      lastPrice * PRICE_TOLERANCE,
-      result === "approved" ? new Date(Date.now() + APPROVAL_SECONDS * 1000).toISOString() : null,
-      ts
-    );
-    db.exec("COMMIT");
+        lastPrice * PRICE_TOLERANCE,
+        result === "approved" ? new Date(Date.now() + APPROVAL_SECONDS * 1000).toISOString() : null
+      );
+    });
   } catch (err) {
-    db.exec("ROLLBACK");
+    // EC-G8: two presses with the same key at the same moment -> one decision
+    const prior = key
+      ? await db.one<{ id: string }>(
+          `SELECT d.id FROM trade_intents i JOIN gate_decisions d ON d.intent_id = i.id
+           WHERE i.idempotency_key = ? AND i.user_id = ?`,
+          key,
+          user.id
+        )
+      : undefined;
+    if (prior) return NextResponse.json({ decisionId: prior.id, duplicate: true, ...(await decisionView(prior.id)) });
     throw err;
   }
 
-  return NextResponse.json({ decisionId, ...decisionView(decisionId) }, { status: 201 });
+  return NextResponse.json({ decisionId, ...(await decisionView(decisionId)) }, { status: 201 });
 }
 
-function decisionView(decisionId: string) {
-  const d = db
-    .prepare(
-      `SELECT d.*, i.side, i.entry_price, i.stop_price, i.target_price, i.risk_pct, i.risk_reward, i.instrument
-       FROM gate_decisions d JOIN trade_intents i ON i.id = d.intent_id WHERE d.id = ?`
-    )
-    .get(decisionId) as Record<string, unknown>;
+async function decisionView(decisionId: string) {
+  const d = (await db.one<Record<string, unknown>>(
+    `SELECT d.*, i.side, i.entry_price, i.stop_price, i.target_price, i.risk_pct, i.risk_reward, i.instrument
+     FROM gate_decisions d JOIN trade_intents i ON i.id = d.intent_id WHERE d.id = ?`,
+    decisionId
+  ))!;
   return {
     result: d.result as "approved" | "denied" | "needs_evidence",
-    reasons: JSON.parse(String(d.reasons_json)),
+    reasons: json(d.reasons, {}),
     validUntil: d.valid_until as string | null,
     referencePrice: d.reference_price as number,
     resolution: (d.resolution as string) ?? null,

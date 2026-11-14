@@ -13,35 +13,57 @@ Next.js 16 (App Router) + Tailwind CSS. Built by Daniel and Mayokun. See the roo
 | `app/app/workspace/` | Trade workspace with chart and pre-trade gate (4.4, 4.5, flows F5 to F7) |
 | `app/app/journal/`, `app/app/settings/` | Journal and settings |
 | `app/api/` | Server routes for auth, chats, evidence, market data, transcription and the workspace |
-| `lib/` | Server-side logic: database, auth, AI providers, market data, workspace and gate |
-| `proxy.ts` | Sends signed-out visitors to `/login` (Next.js 16 renamed middleware to proxy) |
+| `lib/db.ts` | Database access (Supabase Postgres) |
+| `lib/supabase.ts` | Supabase Auth (sign-in cookies) and Storage (private files) |
+| `lib/` (other files) | Checklist building, evidence, AI providers, market data, workspace and gate logic |
+| `proxy.ts` | Refreshes the Supabase session and sends signed-out visitors to `/login` |
 | `scripts/build-homepage.mjs` | Rebuilds the landing page from `content/homepage.html` (`npm run homepage -w @edge/web`) |
 
-## Temporary demo backend
+## Where data lives
 
-Until the NestJS backend in `api/` and Supabase are ready, this app has its own small server side in `app/api/` and `lib/`:
-
-- **Data:** a local SQLite file (`lib/db.ts`). Data is not kept between Vercel deployments.
+- **Accounts:** Supabase Auth (passwords, sessions, email confirmation, password reset).
+- **Data:** Supabase Postgres, tables from `supabase/migrations/` (checklists, versions, rules, evidence, workspace sessions, rule checks, gate decisions, overrides, AI runs).
+- **Files:** Supabase Storage, private buckets `evidence` (example charts) and `frames` (chart captures), one folder per user.
 - **AI:** Groq first, OpenRouter as fallback (`lib/ai.ts`). Keys stay on the server.
-- **Market data:** Twelve Data (`lib/market.ts`).
+- **Market data:** Binance for crypto (no key), Twelve Data for forex and indices (`lib/market.ts`).
 
-These parts are planned to move to Sheyi's backend in `api/` (PRD 9.1, PR-GT-7: the gate runs on the server).
+The server connects to Postgres directly, which bypasses row-level security, so every query filters by the signed-in user's id.
 
 ## Settings (`web/.env.local`, never committed)
 
 ```
+# Supabase (Project Settings → API, and Connect → Transaction pooler)
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
+
+# AI and market data
 GROQ_API_KEY=
+OPENROUTER_API_KEY=
+TWELVE_DATA_API_KEY=
+
+# Optional
 GROQ_MODEL=
 GROQ_STT_MODEL=
 GROQ_VISION_MODEL=
-OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
 OPENROUTER_VISION_MODEL=
-TWELVE_DATA_API_KEY=
-EDGE_DB_PATH=
-EDGE_EVIDENCE_DIR=
+DATABASE_POOL_MAX=
 ```
 
-Ask Daniel for the values. Model and path settings are optional; the code has defaults.
+- `DATABASE_URL`: use the **Transaction pooler** connection string (port 6543) with the database password.
+- `SUPABASE_SERVICE_ROLE_KEY` gives full access: server only, never in a `NEXT_PUBLIC_` variable, never shared in chat.
+- Ask Sheyi for the Supabase values and Daniel for the AI and market-data keys.
+
+## Local development with a local Supabase
+
+With Docker running, from the repo root:
+
+```
+npx supabase start   # local Supabase; applies supabase/migrations/
+```
+
+It prints a local API URL, anon key, service role key and database URL to put in `web/.env.local`. Local sign-ups don't need email confirmation.
 
 Run from the repo root: `npm run dev:web`.

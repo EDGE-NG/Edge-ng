@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
-import { db, now, uuid } from "@/lib/db";
+import { db, json, uuid } from "@/lib/db";
 import { findInstrument, getCandles } from "@/lib/market";
 
 /**
@@ -17,13 +17,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { id } = await params;
-  const d = db
-    .prepare(
-      `SELECT d.*, i.user_id, i.instrument, i.id AS intent_id FROM gate_decisions d
-       JOIN trade_intents i ON i.id = d.intent_id WHERE d.id = ? AND i.user_id = ?`
-    )
-    .get(id, user.id) as
-    | {
+  const d = await db.one<{
         id: string;
         intent_id: string;
         result: string;
@@ -31,22 +25,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         valid_until: string | null;
         reference_price: number;
         price_tolerance: number;
-        reasons_json: string;
+        reasons: unknown;
         instrument: string;
-      }
-    | undefined;
+      }>(
+    `SELECT d.*, i.instrument, i.id AS intent_id FROM gate_decisions d
+     JOIN trade_intents i ON i.id = d.intent_id WHERE d.id = ? AND i.user_id = ?`,
+    id,
+    user.id
+  );
   if (!d) return NextResponse.json({ error: "Decision not found." }, { status: 404 });
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; reason?: string };
-  const ts = now();
-  const resolve = (resolution: string, intentStatus: string) => {
-    db.prepare("UPDATE gate_decisions SET resolution = ?, resolved_at = ? WHERE id = ?").run(resolution, ts, d.id);
-    db.prepare("UPDATE trade_intents SET status = ? WHERE id = ?").run(intentStatus, d.intent_id);
-  };
+  const resolve = (resolution: string, intentStatus: string) =>
+    db.tx(async (t) => {
+      await t.run("UPDATE gate_decisions SET resolution = ?, resolved_at = now() WHERE id = ?", resolution, d.id);
+      await t.run("UPDATE trade_intents SET status = ? WHERE id = ?", intentStatus, d.intent_id);
+    });
 
   if (body.action === "accept") {
     if (d.result === "approved") return NextResponse.json({ error: "Nothing to accept: this trade passed." }, { status: 409 });
-    resolve("accepted_denial", "cancelled");
+    if (d.resolution) return NextResponse.json({ error: "This decision is already closed." }, { status: 409 });
+    await resolve("accepted_denial", "cancelled");
     return NextResponse.json({ ok: true, resolution: "accepted_denial" });
   }
 
@@ -55,23 +54,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (d.resolution && d.resolution !== "overridden") {
       return NextResponse.json({ error: "This decision is already closed." }, { status: 409 });
     }
-    const reasons = JSON.parse(d.reasons_json) as {
+    const reasons = json(d.reasons, { failing: [], missing: [], ticket: [] }) as {
       failing: Array<{ itemKey: string; text: string }>;
       missing: Array<{ itemKey: string; text: string }>;
       ticket: string[];
     };
-    db.prepare(
-      `INSERT INTO overrides (id, decision_id, user_id, rules_overridden_json, reason_text, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(
+    // One override per decision (pressing Override again is a no-op).
+    await db.run(
+      `INSERT INTO overrides (id, decision_id, user_id, rules_overridden, reason_text)
+       VALUES (?, ?, ?, ?, ?) ON CONFLICT (decision_id) DO NOTHING`,
       uuid(),
       d.id,
       user.id,
-      JSON.stringify({ failing: reasons.failing, missing: reasons.missing, ticket: reasons.ticket }),
-      typeof body.reason === "string" ? body.reason.trim().slice(0, 500) || null : null,
-      ts
+      { failing: reasons.failing, missing: reasons.missing, ticket: reasons.ticket },
+      typeof body.reason === "string" ? body.reason.trim().slice(0, 500) || null : null
     );
-    resolve("overridden", "decided");
+    if (!d.resolution) await resolve("overridden", "decided");
     return NextResponse.json({ ok: true, resolution: "overridden" });
   }
 
@@ -79,8 +77,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const overridden = d.resolution === "overridden";
     if (!overridden) {
       if (d.result !== "approved") return NextResponse.json({ error: "This trade didn't pass your checklist." }, { status: 409 });
+      if (d.resolution) return NextResponse.json({ error: "This decision is already closed." }, { status: 409 });
       if (!d.valid_until || Date.parse(d.valid_until) < Date.now()) {
-        resolve("expired", "expired");
+        await resolve("expired", "expired");
         return NextResponse.json({ error: "The approval expired. Check the trade again before placing it.", code: "expired" }, { status: 409 });
       }
       // price moved beyond tolerance since the approval (EC-G4)
@@ -90,7 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const c = await getCandles(inst, "1m", 2);
           const p = c[c.length - 1].close;
           if (Math.abs(p - d.reference_price) > d.price_tolerance) {
-            resolve("expired", "expired");
+            await resolve("expired", "expired");
             return NextResponse.json(
               { error: "Price moved too far since the check. Check the trade again.", code: "price_moved" },
               { status: 409 }
@@ -101,12 +100,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
     }
-    resolve("placed", "placed");
+    await resolve("placed", "placed");
     return NextResponse.json({ ok: true, resolution: "placed" });
   }
 
   if (body.action === "cancel") {
-    resolve("cancelled", "cancelled");
+    if (d.resolution && d.resolution !== "overridden") {
+      return NextResponse.json({ error: "This decision is already closed." }, { status: 409 });
+    }
+    await resolve("cancelled", "cancelled");
     return NextResponse.json({ ok: true, resolution: "cancelled" });
   }
 

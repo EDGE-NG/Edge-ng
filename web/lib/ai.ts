@@ -3,7 +3,37 @@
  * Both expose OpenAI-compatible chat-completions APIs.
  * Keys stay server-side; the client never sees them.
  */
-import { db, now, uuid } from "./db";
+import { db, uuid } from "./db";
+
+const JOBS = ["plan_extract", "plan_patch", "image_interpret", "rule_check", "journal", "digest", "transcribe"];
+
+/** Record a model call in llm_runs (PRD 5.6, REQ-LLM-1). Never breaks the main flow. */
+export async function recordRun(r: {
+  userId?: string | null;
+  job: string;
+  provider: string;
+  model: string;
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  latencyMs?: number | null;
+}): Promise<void> {
+  try {
+    await db.run(
+      `INSERT INTO llm_runs (id, user_id, job, provider, model, status, latency_ms, tokens_in, tokens_out)
+       VALUES (?, ?, ?, ?, ?, 'ok', ?, ?, ?)`,
+      uuid(),
+      r.userId ?? null,
+      JOBS.includes(r.job) ? r.job : "plan_extract",
+      r.provider,
+      r.model,
+      r.latencyMs ?? null,
+      r.tokensIn ?? null,
+      r.tokensOut ?? null
+    );
+  } catch (err) {
+    console.error("[ai] could not record the model run:", err);
+  }
+}
 
 interface ProviderConfig {
   name: string;
@@ -65,6 +95,7 @@ export async function chat(
   const errors: string[] = [];
   for (const p of candidates) {
     const model = vision ? p.visionModel : p.textModel;
+    const started = Date.now();
     try {
       const res = await fetch(p.url, {
         method: "POST",
@@ -88,23 +119,15 @@ export async function chat(
       const data = await res.json();
       const text: string = data.choices?.[0]?.message?.content ?? "";
       const usage = data.usage ?? {};
-      try {
-        db.prepare(
-          `INSERT INTO ai_usage_ledger (id, user_id, feature, provider, model, tokens_in, tokens_out, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(
-          uuid(),
-          opts.userId ?? null,
-          opts.feature ?? "chat",
-          p.name,
-          model,
-          usage.prompt_tokens ?? null,
-          usage.completion_tokens ?? null,
-          now()
-        );
-      } catch {
-        // usage logging must never break the main flow
-      }
+      await recordRun({
+        userId: opts.userId,
+        job: opts.feature ?? "plan_extract",
+        provider: p.name,
+        model,
+        tokensIn: usage.prompt_tokens,
+        tokensOut: usage.completion_tokens,
+        latencyMs: Date.now() - started,
+      });
       return { text, provider: p.name, model };
     } catch (err) {
       // record this provider's failure and try the next one

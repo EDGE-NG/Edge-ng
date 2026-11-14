@@ -1,5 +1,5 @@
 /** Workspace sessions: state for the live checklist panel, and frame processing. */
-import { db, now, uuid } from "./db";
+import { db, json, now, uuid } from "./db";
 import { loadItems, type Rule } from "./edge-builder";
 import { activeImages, saveFile } from "./evidence";
 import {
@@ -24,6 +24,7 @@ import {
   type Ticket,
 } from "./workspace";
 
+/** A workspace session. `edge_id` is the checklist it runs against. */
 export interface SessionRow {
   id: string;
   user_id: string;
@@ -32,28 +33,44 @@ export interface SessionRow {
   instrument: string;
   asset_class: string;
   platform: string | null;
-  risk_params_json: string | null;
+  risk_params: unknown;
   started_at: string;
 }
 
-export function getSession(id: string, userId: string): SessionRow | null {
+const SESSION_COLS = `id, user_id, checklist_id AS edge_id, checklist_version_id, instrument, asset_class,
+  platform, risk_params, started_at`;
+
+export async function getSession(id: string, userId: string): Promise<SessionRow | null> {
   return (
-    (db.prepare("SELECT * FROM workspace_sessions WHERE id = ? AND user_id = ? AND ended_at IS NULL").get(id, userId) as unknown as
-      | SessionRow
-      | undefined) ?? null
+    (await db.one<SessionRow>(
+      `SELECT ${SESSION_COLS} FROM workspace_sessions WHERE id = ? AND user_id = ? AND ended_at IS NULL`,
+      id,
+      userId
+    )) ?? null
   );
 }
 
-export function sessionRules(s: SessionRow): { rules: Rule[]; risk: RiskParams; indicators: IndicatorSpec[] } {
-  const rules = loadItems(s.checklist_version_id);
-  const risk = s.risk_params_json ? (JSON.parse(s.risk_params_json) as RiskParams) : parseRiskParams(rules);
+/** The trader's open session, if any. */
+export async function openSession(userId: string): Promise<SessionRow | null> {
+  return (
+    (await db.one<SessionRow>(
+      `SELECT ${SESSION_COLS} FROM workspace_sessions
+       WHERE user_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`,
+      userId
+    )) ?? null
+  );
+}
+
+export async function sessionRules(s: SessionRow): Promise<{ rules: Rule[]; risk: RiskParams; indicators: IndicatorSpec[] }> {
+  const rules = await loadItems(s.checklist_version_id);
+  const risk = json<RiskParams | null>(s.risk_params, null) ?? parseRiskParams(rules);
   return { rules, risk, indicators: indicatorsFromRules(rules.map((r) => r.text)) };
 }
 
 /** Rule states for the panel / gate. Code rules need a ticket (else "unchecked"). */
-export function ruleStates(s: SessionRow, codeChecks?: Map<string, Check>): RuleState[] {
-  const { rules, risk } = sessionRules(s);
-  const latest = latestChecks(s.id);
+export async function ruleStates(s: SessionRow, codeChecks?: Map<string, Check>): Promise<RuleState[]> {
+  const { rules, risk } = await sessionRules(s);
+  const latest = await latestChecks(s.id);
   const t = Date.now();
   return rules.map((rule) => {
     const mode = ruleMode(rule, risk);
@@ -67,17 +84,18 @@ export function ruleStates(s: SessionRow, codeChecks?: Map<string, Check>): Rule
 }
 
 /** What the client panel shows. */
-export function sessionView(s: SessionRow) {
-  const { risk, indicators } = sessionRules(s);
-  const states = ruleStates(s);
+export async function sessionView(s: SessionRow) {
+  const { risk, indicators } = await sessionRules(s);
+  const states = await ruleStates(s);
   const examples = new Map<string, number>();
-  for (const img of activeImages(s.edge_id)) {
+  for (const img of await activeImages(s.edge_id)) {
     if (img.confirmed) examples.set(img.item_key, (examples.get(img.item_key) ?? 0) + 1);
   }
-  const edge = db.prepare("SELECT name FROM edges WHERE id = ?").get(s.edge_id) as { name: string } | undefined;
-  const version = db.prepare("SELECT version_number FROM edge_versions WHERE id = ?").get(s.checklist_version_id) as
-    | { version_number: number }
-    | undefined;
+  const edge = await db.one<{ name: string }>("SELECT name FROM checklists WHERE id = ?", s.edge_id);
+  const version = await db.one<{ version_number: number }>(
+    "SELECT version_number FROM checklist_versions WHERE id = ?",
+    s.checklist_version_id
+  );
   return {
     session: {
       id: s.id,
@@ -105,22 +123,34 @@ export function sessionView(s: SessionRow) {
   };
 }
 
-export function startSession(userId: string, edgeId: string, instrument: string, platform: string | null): SessionRow {
-  const edge = db.prepare("SELECT id, active_version_id FROM edges WHERE id = ? AND user_id = ?").get(edgeId, userId) as
-    | { id: string; active_version_id: string | null }
-    | undefined;
+export async function startSession(userId: string, edgeId: string, instrument: string, platform: string | null): Promise<SessionRow> {
+  const edge = await db.one<{ id: string; active_version_id: string | null }>(
+    "SELECT id, active_version_id FROM checklists WHERE id = ? AND user_id = ?",
+    edgeId,
+    userId
+  );
   if (!edge?.active_version_id) throw new Error("no_active_checklist");
   const inst = findInstrument(instrument);
   if (!inst) throw new Error("unknown_instrument");
-  // one open session per trader: a new instrument starts fresh (EC: instrument changed)
-  db.prepare("UPDATE workspace_sessions SET ended_at = ? WHERE user_id = ? AND ended_at IS NULL").run(now(), userId);
   const id = uuid();
-  const rules = loadItems(edge.active_version_id);
-  db.prepare(
-    `INSERT INTO workspace_sessions (id, user_id, edge_id, checklist_version_id, instrument, asset_class, platform, risk_params_json, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, userId, edgeId, edge.active_version_id, inst.symbol, inst.assetClass, platform, JSON.stringify(parseRiskParams(rules)), now());
-  return getSession(id, userId)!;
+  const rules = await loadItems(edge.active_version_id);
+  await db.tx(async (t) => {
+    // one open session per trader: a new instrument starts fresh (EC: instrument changed)
+    await t.run("UPDATE workspace_sessions SET ended_at = now() WHERE user_id = ? AND ended_at IS NULL", userId);
+    await t.run(
+      `INSERT INTO workspace_sessions (id, user_id, checklist_id, checklist_version_id, instrument, asset_class, platform, risk_params)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
+      userId,
+      edgeId,
+      edge.active_version_id,
+      inst.symbol,
+      inst.assetClass,
+      platform,
+      parseRiskParams(rules)
+    );
+  });
+  return (await getSession(id, userId))!;
 }
 
 /**
@@ -135,40 +165,40 @@ export async function processFrame(
   const inst = findInstrument(s.instrument)!;
   const candles = await getCandles(inst, args.timeframe, 300);
   const last = candles[candles.length - 1];
-  const { rules, risk, indicators } = sessionRules(s);
+  const { rules, risk, indicators } = await sessionRules(s);
 
   // skip unchanged frames (PRD 5.7 cost control)
-  const prev = db
-    .prepare(
-      `SELECT id, data_as_of, captured_at, candles_json FROM chart_frames
-       WHERE session_id = ? AND timeframe = ? ORDER BY captured_at DESC LIMIT 1`
-    )
-    .get(s.id, args.timeframe) as { id: string; data_as_of: number; captured_at: string; candles_json: string } | undefined;
+  const prev = await db.one<{ id: string; captured_at: string; candles: unknown }>(
+    `SELECT id, captured_at, candles FROM chart_frames
+     WHERE session_id = ? AND timeframe = ? ORDER BY captured_at DESC LIMIT 1`,
+    s.id,
+    args.timeframe
+  );
   if (!args.force && prev && Date.now() - Date.parse(prev.captured_at) < 60_000) {
-    const prevLast = (JSON.parse(prev.candles_json) as Array<{ time: number; close: number }>).at(-1);
+    const prevLast = json<Array<{ time: number; close: number }>>(prev.candles, []).at(-1);
     if (prevLast && prevLast.time === last.time && prevLast.close === last.close) {
       return { frameId: prev.id, dataAge: dataAgeSeconds(candles, args.timeframe), reused: true };
     }
   }
 
   const frameId = uuid();
-  const objectKey = args.image ? saveFile(s.user_id, `frame-${frameId}`, "image/png", args.image) : null;
-  db.prepare(
-    `INSERT INTO chart_frames (id, session_id, instrument, timeframe, source, visible_from, visible_to, indicators_json,
-       object_key, candles_json, data_as_of, captured_at)
-     VALUES (?, ?, ?, ?, 'edge_chart', ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  const objectKey = args.image ? await saveFile(s.user_id, `frame-${frameId}`, "image/png", args.image, "frames") : null;
+  const epoch = (v: number | undefined) => (v ? new Date(v * 1000).toISOString() : null);
+  await db.run(
+    `INSERT INTO chart_frames (id, user_id, session_id, instrument, timeframe, source, visible_from, visible_to,
+       indicators, object_key, candles, data_as_of)
+     VALUES (?, ?, ?, ?, ?, 'edge_chart', ?, ?, ?, ?, ?, ?)`,
     frameId,
+    s.user_id,
     s.id,
     s.instrument,
     args.timeframe,
-    args.visibleFrom ?? null,
-    args.visibleTo ?? null,
-    JSON.stringify(indicators),
+    epoch(args.visibleFrom),
+    epoch(args.visibleTo),
+    indicators,
     objectKey,
-    JSON.stringify(candles.slice(-120)),
-    last.time,
-    now()
+    candles.slice(-120),
+    last.time
   );
 
   // only the chart rules this timeframe can answer; the rest keep their last result
@@ -188,17 +218,17 @@ export async function processFrame(
       })
     )
   );
-  checks.forEach((c, i) => saveCheck(s.id, c, targets[i].hard_gate, "vision"));
+  await Promise.all(checks.map((c, i) => saveCheck(s, c, targets[i].hard_gate, "vision")));
   return { frameId, dataAge: dataAgeSeconds(candles, args.timeframe), reused: false };
 }
 
 /** Trader confirmation for rules only they can confirm (EC-P6). */
-export function confirmByTrader(s: SessionRow, itemKey: string, confirmed: boolean) {
-  const { rules, risk } = sessionRules(s);
+export async function confirmByTrader(s: SessionRow, itemKey: string, confirmed: boolean): Promise<boolean> {
+  const { rules, risk } = await sessionRules(s);
   const rule = rules.find((r) => r.item_key === itemKey);
   if (!rule || ruleMode(rule, risk) !== "trader") return false;
-  saveCheck(
-    s.id,
+  await saveCheck(
+    s,
     {
       itemKey,
       result: confirmed ? "pass" : "inconclusive",
@@ -218,14 +248,14 @@ export function confirmByTrader(s: SessionRow, itemKey: string, confirmed: boole
 }
 
 /** Trades the trader confirmed placing today (UTC), for "max N trades a day". */
-export function tradesToday(userId: string): number {
+export async function tradesToday(userId: string): Promise<number> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM gate_decisions d JOIN trade_intents i ON i.id = d.intent_id
-       WHERE i.user_id = ? AND d.resolution = 'placed' AND d.resolved_at >= ?`
-    )
-    .get(userId, start.toISOString()) as { n: number };
-  return row.n;
+  const row = await db.one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM gate_decisions d JOIN trade_intents i ON i.id = d.intent_id
+     WHERE i.user_id = ? AND d.resolution = 'placed' AND d.resolved_at >= ?`,
+    userId,
+    start.toISOString()
+  );
+  return row?.n ?? 0;
 }

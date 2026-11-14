@@ -6,12 +6,12 @@ import { createChat, listChats } from "@/lib/chats";
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  return NextResponse.json({ user: { name: user.name, email: user.email }, chats: listChats(user.id) });
+  return NextResponse.json({ user: { name: user.name, email: user.email }, chats: await listChats(user.id) });
 }
 
 /** POST -> a new, empty "build an edge" chat (PR-CH-1, PR-CH-5). */
 export async function POST() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  return NextResponse.json({ chat: createChat(user.id, "build_edge") }, { status: 201 });
+  return NextResponse.json({ chat: await createChat(user.id, "build_edge") }, { status: 201 });
 }

@@ -21,6 +21,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [accept, setAccept] = useState(false);
   const [error, setError] = useState("");
   const [exists, setExists] = useState(false);
+  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<"" | "submit">("");
 
   async function submit(e: React.FormEvent) {
@@ -29,6 +30,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
     setBusy("submit");
     setError("");
     setExists(false);
+    setNotice("");
     try {
       const res = await fetch(signup ? "/api/auth/signup" : "/api/auth/login", {
         method: "POST",
@@ -49,6 +51,12 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       if (!res.ok) {
         setExists(d.code === "exists");
         throw new Error(d.error || "Something went wrong. Try again.");
+      }
+      // Email confirmation is on: Supabase sent a verification link (PRD F1 step 2).
+      if (d.needsConfirmation) {
+        setNotice(d.message || "Check your email for a confirmation link, then sign in.");
+        setBusy("");
+        return;
       }
       router.push("/checklist");
       router.refresh();
@@ -173,6 +181,11 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               </label>
             )}
 
+            {notice && (
+              <p role="status" className="rounded-xl border border-pass/40 bg-pass-bg px-3.5 py-2.5 text-sm text-pass">
+                ✓ {notice}
+              </p>
+            )}
             {error && (
               <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3.5 py-2.5 text-sm text-fail">
                 {error}{" "}

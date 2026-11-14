@@ -15,7 +15,7 @@
  *    hard gate.
  */
 import { chatJson, type ChatMessage } from "./ai";
-import { db, now, uuid } from "./db";
+import { db, json, now, uuid } from "./db";
 import type { Rule } from "./edge-builder";
 import { activeImages, readFile, type EvidenceImage } from "./evidence";
 import { computeIndicator, indicatorLabel, type Candle, type IndicatorSpec, type Timeframe } from "./market";
@@ -278,7 +278,7 @@ export async function checkChartRule(args: {
   };
 
   // PR-CL-5: no confirmed evidence image -> this rule cannot be checked yet
-  const examples: EvidenceImage[] = activeImages(args.edgeId, rule.item_key!).filter((i) => i.confirmed);
+  const examples: EvidenceImage[] = (await activeImages(args.edgeId, rule.item_key!)).filter((i) => i.confirmed);
   if (examples.length === 0) {
     return {
       ...base,
@@ -328,13 +328,15 @@ export async function checkChartRule(args: {
   ];
   // the trader's confirmed examples (cached on disk), then the live frame
   for (const e of examples.slice(0, 6)) {
-    const row = db.prepare("SELECT object_key, mime_type FROM evidence_images WHERE id = ?").get(e.id) as
-      | { object_key: string; mime_type: string }
-      | undefined;
+    const row = await db.one<{ object_key: string; mime_type: string }>(
+      "SELECT object_key, mime_type FROM evidence_images WHERE id = ?",
+      e.id
+    );
     if (!row) continue;
     try {
+      const data = await readFile(row.object_key);
       content.push({ type: "text", text: `Example ${e.id} (${e.polarity}):` });
-      content.push({ type: "image_url", image_url: { url: `data:${row.mime_type};base64,${readFile(row.object_key).toString("base64")}` } });
+      content.push({ type: "image_url", image_url: { url: `data:${row.mime_type};base64,${data.toString("base64")}` } });
     } catch {
       /* file missing: skip this example */
     }
@@ -401,23 +403,30 @@ export async function checkChartRule(args: {
 
 /* -------------------------------------------------------------- store ---- */
 
-export function saveCheck(sessionId: string, c: Check, hardGate: boolean, model: string | null = null) {
-  db.prepare(
-    `INSERT INTO rule_checks (id, session_id, item_key, frame_id, result, observed_facts, reasoning, confidence,
-       evidence_json, missing_evidence, is_hard_gate, source, model, checked_at, stale_after)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+export async function saveCheck(
+  s: { id: string; user_id: string },
+  c: Check,
+  hardGate: boolean,
+  model: string | null = null
+): Promise<void> {
+  // the frame id is only kept when that frame was stored for this session
+  await db.run(
+    `INSERT INTO rule_checks (id, user_id, session_id, item_key, frame_id, result, observed_facts, reasoning,
+       confidence_band, evidence, missing_evidence, is_hard_gate, source, model, checked_at, stale_after)
+     VALUES (?, ?, ?, ?, (SELECT id FROM chart_frames WHERE id = ? AND session_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     uuid(),
-    sessionId,
+    s.user_id,
+    s.id,
     c.itemKey,
     c.frameId,
+    s.id,
     c.result,
-    c.observed,
+    c.observed ? { text: c.observed } : null,
     c.reasoning,
     c.confidence,
-    c.evidence ? JSON.stringify({ ...c.evidence, timeframe: c.timeframe }) : JSON.stringify({ timeframe: c.timeframe }),
+    { ...(c.evidence ?? {}), timeframe: c.timeframe },
     c.missing,
-    hardGate ? 1 : 0,
+    hardGate,
     c.source,
     model,
     c.checkedAt,
@@ -426,24 +435,26 @@ export function saveCheck(sessionId: string, c: Check, hardGate: boolean, model:
 }
 
 /** Latest check per rule in this session (only LLM / trader ones; code rules are computed live). */
-export function latestChecks(sessionId: string): Map<string, Check> {
-  const rows = db
-    .prepare(
-      `SELECT rc.* FROM rule_checks rc
-       JOIN (SELECT item_key, MAX(checked_at) AS m FROM rule_checks WHERE session_id = ? GROUP BY item_key) last
-         ON last.item_key = rc.item_key AND last.m = rc.checked_at
-       WHERE rc.session_id = ?`
-    )
-    .all(sessionId, sessionId) as Array<Record<string, unknown>>;
+export async function latestChecks(sessionId: string): Promise<Map<string, Check>> {
+  const rows = await db.all<Record<string, unknown>>(
+    `SELECT DISTINCT ON (item_key) * FROM rule_checks
+     WHERE session_id = ? ORDER BY item_key, checked_at DESC`,
+    sessionId
+  );
   const out = new Map<string, Check>();
   for (const r of rows) {
-    const ev = r.evidence_json ? JSON.parse(String(r.evidence_json)) : {};
+    const ev = json<Record<string, unknown>>(r.evidence, {}) as {
+      timeframe?: string | null;
+      candleRange?: [number, number];
+      referenceImageIds?: string[];
+    };
+    const observed = json<{ text?: string } | null>(r.observed_facts, null);
     out.set(String(r.item_key), {
       itemKey: String(r.item_key),
       result: r.result as Result,
-      observed: String(r.observed_facts ?? ""),
+      observed: observed?.text ?? "",
       reasoning: String(r.reasoning ?? ""),
-      confidence: (r.confidence as Check["confidence"]) ?? null,
+      confidence: (r.confidence_band as Check["confidence"]) ?? null,
       missing: (r.missing_evidence as string) ?? null,
       source: r.source as Check["source"],
       timeframe: ev.timeframe ?? null,

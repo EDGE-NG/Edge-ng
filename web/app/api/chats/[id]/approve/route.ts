@@ -16,18 +16,18 @@ export async function POST(_req: Request, { params }: Params) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const { id } = await params;
-  const chat = getChat(id, user.id);
+  const chat = await getChat(id, user.id);
   if (!chat?.edge_id) return NextResponse.json({ error: "No checklist to approve yet" }, { status: 404 });
-  const draft = loadDraft(chat.edge_id);
+  const draft = await loadDraft(chat.edge_id);
   if (!draft) return NextResponse.json({ error: "No open draft" }, { status: 409 });
   if (!draft.dirty) {
     return NextResponse.json({ error: "Nothing has changed since you approved it." }, { status: 409 });
   }
 
   try {
-    const { approvedVersionNumber } = approveDraft(draft.edgeId, draft.versionId);
+    const { approvedVersionNumber } = await approveDraft(draft.edgeId, draft.versionId);
     const hard = draft.items.filter((r) => r.hard_gate).length;
-    addMessage(chat.id, {
+    await addMessage(chat, {
       role: "edge",
       kind: "text",
       content:
@@ -41,5 +41,5 @@ export async function POST(_req: Request, { params }: Params) {
     }
     throw err;
   }
-  return NextResponse.json(chatView(getChat(id, user.id)!));
+  return NextResponse.json(await chatView((await getChat(id, user.id))!));
 }

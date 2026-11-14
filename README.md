@@ -24,7 +24,8 @@ The full product is described in the PRD: *Edge (edge.ng) Product Requirements D
 Everything is TypeScript.
 
 **Built so far:**
-- **Frontend (Daniel):** landing page, sign up and sign in, chat-first checklist builder, evidence library, trade workspace with chart and pre-trade gate, journal and settings. It currently runs on its own temporary demo backend inside `web/` (SQLite, Groq/OpenRouter AI, Twelve Data). See [web/README.md](web/README.md).
+- **Frontend (Daniel):** landing page, sign up and sign in, chat-first checklist builder, evidence library, trade workspace with chart and pre-trade gate, journal and settings. Its server routes (`web/app/api/`) store everything in Supabase: accounts in Supabase Auth, data in Postgres, chart images in private Storage. AI runs on Groq/OpenRouter; prices come from Binance and Twelve Data. See [web/README.md](web/README.md).
+- **Database (Sheyi):** Supabase migrations in `supabase/migrations/`, with the PRD's integrity rules enforced in the database.
 - Backend modules for identity, edge, workspace-gate, llm, journal, billing and notifications, plus a `/health` check.
 - The gate's hard-gate roll-up in code (`api/src/workspace-gate/decision-engine.ts`), with tests (REQ-GT-1).
 
@@ -47,13 +48,9 @@ Other commands: `npm test` (backend tests), `npm run build` (build everything), 
 
 Create these files yourself. They are never committed. Ask Sheyi for the values.
 
-**`web/.env.local`**: the frontend's demo settings (AI and market-data keys) are listed in [web/README.md](web/README.md). Ask Daniel for those values. Later, for the main backend:
-```
-NEXT_PUBLIC_API_URL=http://localhost:4000
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
-Only `NEXT_PUBLIC_` values reach the browser, so never put secret keys in them.
+**`web/.env.local`**: Supabase, AI and market-data settings, listed in [web/README.md](web/README.md). Ask Sheyi for the Supabase values and Daniel for the AI and market-data keys. Only `NEXT_PUBLIC_` values reach the browser, so never put secret keys in them.
+
+**Local database instead:** with Docker running, `npx supabase start` runs Supabase on your computer with all migrations applied, and prints local keys to use.
 
 **`api/.env`**
 ```

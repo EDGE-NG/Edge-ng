@@ -6,10 +6,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const user = await getUser();
   if (!user) return new Response("Not authenticated", { status: 401 });
   const { id } = await params;
-  const img = getImage(id, user.id);
+  const img = await getImage(id, user.id);
   if (!img) return new Response("Not found", { status: 404 });
   try {
-    const data = readFile(img.object_key);
+    const data = await readFile(img.object_key);
     return new Response(new Uint8Array(data), {
       headers: {
         "Content-Type": img.mime_type,

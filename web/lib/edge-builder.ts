@@ -8,7 +8,7 @@
  * severity stays a suggestion: the trader flips hard gate / soft themselves.
  */
 import { chatJson } from "./ai";
-import { db, now, uuid } from "./db";
+import { db, uuid, type Db } from "./db";
 
 export const CATEGORIES = ["entry", "context", "confirmation", "invalidation", "risk", "note"] as const;
 export type Category = (typeof CATEGORIES)[number];
@@ -263,41 +263,41 @@ export async function buildFromConversation(args: {
 }
 
 /* ------------------------------------------------------- persistence ----- */
+// Tables: checklists ("edges" in this code), checklist_versions, checklist_items.
 
 interface ItemRow {
   id: string;
-  item_key: string | null;
+  item_key: string;
   category: string;
-  text: string;
-  hard_gate: number;
+  title: string;
+  severity: string;
   position: number;
   source_span: string | null;
   assessability: string | null;
   required_timeframe: string | null;
 }
 
+const ITEM_COLS = `id, item_key, category, title, severity, position, source_span, assessability, required_timeframe`;
+
 function rowToRule(r: ItemRow): Rule {
   return {
     id: r.id,
     item_key: r.item_key ?? r.id,
     category: asCategory(r.category) ?? "note",
-    text: r.text,
-    hard_gate: r.hard_gate === 1,
+    text: r.title,
+    hard_gate: r.severity === "hard_gate",
     assessability: asAssessability(r.assessability),
     required_timeframe: r.required_timeframe,
     source_span: r.source_span,
   };
 }
 
-export function loadItems(versionId: string): Rule[] {
-  return (
-    db
-      .prepare(
-        `SELECT id, item_key, category, text, hard_gate, position, source_span, assessability, required_timeframe
-         FROM checklist_items WHERE version_id = ? ORDER BY position`
-      )
-      .all(versionId) as unknown as ItemRow[]
-  ).map(rowToRule);
+export async function loadItems(versionId: string, conn: Db = db): Promise<Rule[]> {
+  const rows = await conn.all<ItemRow>(
+    `SELECT ${ITEM_COLS} FROM checklist_items WHERE version_id = ? ORDER BY position`,
+    versionId
+  );
+  return rows.map(rowToRule);
 }
 
 function fingerprint(items: Rule[]): string {
@@ -307,28 +307,29 @@ function fingerprint(items: Rule[]): string {
 }
 
 /** The open draft of an edge plus how it relates to the approved version. */
-export function loadDraft(edgeId: string): DraftState | null {
-  const edge = db
-    .prepare("SELECT id, name, active_version_id FROM edges WHERE id = ?")
-    .get(edgeId) as { id: string; name: string; active_version_id: string | null } | undefined;
+export async function loadDraft(edgeId: string): Promise<DraftState | null> {
+  const edge = await db.one<{ id: string; name: string; active_version_id: string | null }>(
+    "SELECT id, name, active_version_id FROM checklists WHERE id = ?",
+    edgeId
+  );
   if (!edge) return null;
-  const draft = db
-    .prepare(
-      `SELECT id, version_number FROM edge_versions
-       WHERE edge_id = ? AND status = 'draft' ORDER BY version_number DESC LIMIT 1`
-    )
-    .get(edgeId) as { id: string; version_number: number } | undefined;
+  const draft = await db.one<{ id: string; version_number: number }>(
+    `SELECT id, version_number FROM checklist_versions
+     WHERE checklist_id = ? AND status = 'draft' ORDER BY version_number DESC LIMIT 1`,
+    edgeId
+  );
   if (!draft) return null;
-  const items = loadItems(draft.id);
+  const items = await loadItems(draft.id);
 
   let approvedVersionNumber: number | null = null;
   let dirty = true;
   if (edge.active_version_id) {
-    const active = db
-      .prepare("SELECT version_number FROM edge_versions WHERE id = ?")
-      .get(edge.active_version_id) as { version_number: number } | undefined;
+    const active = await db.one<{ version_number: number }>(
+      "SELECT version_number FROM checklist_versions WHERE id = ?",
+      edge.active_version_id
+    );
     approvedVersionNumber = active?.version_number ?? null;
-    dirty = fingerprint(loadItems(edge.active_version_id)) !== fingerprint(items);
+    dirty = fingerprint(await loadItems(edge.active_version_id)) !== fingerprint(items);
   }
   return {
     edgeId: edge.id,
@@ -341,26 +342,26 @@ export function loadDraft(edgeId: string): DraftState | null {
   };
 }
 
-const INSERT_ITEM = `INSERT INTO checklist_items
-  (id, version_id, category, text, hard_gate, position, notes, source_span, assessability, required_timeframe, item_key)
-  VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`;
-
-function insertItems(versionId: string, rules: Rule[]) {
-  const ins = db.prepare(INSERT_ITEM);
-  rules.forEach((r, i) =>
-    ins.run(
+/** Every stored rule carries the trader's own words (REQ-LLM-3); the validator guarantees one. */
+async function insertItems(t: Db, userId: string, versionId: string, rules: Rule[]) {
+  for (const [i, r] of rules.entries()) {
+    await t.run(
+      `INSERT INTO checklist_items
+         (id, version_id, user_id, item_key, position, category, title, severity, assessability, required_timeframe, source_span)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       uuid(),
       versionId,
+      userId,
+      r.item_key ?? uuid(),
+      i,
       r.category,
       r.text,
-      r.hard_gate ? 1 : 0,
-      i,
-      r.source_span,
+      r.hard_gate ? "hard_gate" : "soft",
       r.assessability,
       r.required_timeframe,
-      r.item_key ?? uuid()
-    )
-  );
+      r.source_span && r.source_span.trim() ? r.source_span : r.text
+    );
+  }
 }
 
 /**
@@ -390,79 +391,82 @@ function carryKeys(previous: Rule[], next: Rule[]): Rule[] {
 }
 
 /** Create the edge, its first draft version and the rules. Returns the edge id. */
-export function createEdgeWithDraft(userId: string, name: string, sourceText: string, rules: Rule[]): string {
+export async function createEdgeWithDraft(userId: string, name: string, sourceText: string, rules: Rule[]): Promise<string> {
   const edgeId = uuid();
   const versionId = uuid();
-  const ts = now();
-  db.exec("BEGIN");
-  try {
-    db.prepare(
-      `INSERT INTO edges (id, user_id, name, description, active_version_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, NULL, ?, ?)`
-    ).run(edgeId, userId, name, sourceText, ts, ts);
-    db.prepare(
-      `INSERT INTO edge_versions (id, edge_id, version_number, status, source_text, created_at)
-       VALUES (?, ?, 1, 'draft', ?, ?)`
-    ).run(versionId, edgeId, sourceText, ts);
-    insertItems(versionId, rules);
-    db.exec("COMMIT");
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
+  await db.tx(async (t) => {
+    await t.run(
+      `INSERT INTO checklists (id, user_id, name, description) VALUES (?, ?, ?, ?)`,
+      edgeId,
+      userId,
+      name,
+      sourceText
+    );
+    await t.run(
+      `INSERT INTO checklist_versions (id, checklist_id, user_id, version_number, status, source_text)
+       VALUES (?, ?, ?, 1, 'draft', ?)`,
+      versionId,
+      edgeId,
+      userId,
+      sourceText
+    );
+    await insertItems(t, userId, versionId, rules);
+  });
   return edgeId;
 }
 
 /** Replace the rules of an open draft (approved versions are never touched). */
-export function replaceDraftItems(versionId: string, sourceText: string, rules: Rule[]) {
-  db.exec("BEGIN");
-  try {
-    const previous = loadItems(versionId);
-    db.prepare("DELETE FROM checklist_items WHERE version_id = ?").run(versionId);
-    insertItems(versionId, carryKeys(previous, rules));
-    db.prepare("UPDATE edge_versions SET source_text = ? WHERE id = ? AND status = 'draft'").run(
-      sourceText,
+export async function replaceDraftItems(versionId: string, sourceText: string, rules: Rule[]): Promise<void> {
+  await db.tx(async (t) => {
+    const v = await t.one<{ user_id: string; status: string }>(
+      "SELECT user_id, status FROM checklist_versions WHERE id = ?",
       versionId
     );
-    db.exec("COMMIT");
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
+    if (!v || v.status !== "draft") throw new Error("not_a_draft");
+    const previous = await loadItems(versionId, t);
+    await t.run("DELETE FROM checklist_items WHERE version_id = ?", versionId);
+    await insertItems(t, v.user_id, versionId, carryKeys(previous, rules));
+    await t.run("UPDATE checklist_versions SET source_text = ? WHERE id = ? AND status = 'draft'", sourceText, versionId);
+  });
 }
 
 /**
  * Approve the open draft: it becomes the active, immutable version and a new
  * draft copy (v+1) opens for future edits (PRD PR-CL-3).
  */
-export function approveDraft(edgeId: string, versionId: string): { approvedVersionNumber: number } {
-  const draft = db
-    .prepare("SELECT id, status, version_number, source_text FROM edge_versions WHERE id = ? AND edge_id = ?")
-    .get(versionId, edgeId) as
-    | { id: string; status: string; version_number: number; source_text: string | null }
-    | undefined;
+export async function approveDraft(edgeId: string, versionId: string): Promise<{ approvedVersionNumber: number }> {
+  const draft = await db.one<{ id: string; status: string; version_number: number; source_text: string | null; user_id: string }>(
+    "SELECT id, status, version_number, source_text, user_id FROM checklist_versions WHERE id = ? AND checklist_id = ?",
+    versionId,
+    edgeId
+  );
   if (!draft) throw new ApproveError("Version not found", 404);
   if (draft.status !== "draft") throw new ApproveError("This version is already approved.", 409);
-  const items = loadItems(draft.id);
+  const items = await loadItems(draft.id);
   if (items.length === 0) throw new ApproveError("Add at least one rule before approving.", 422);
 
-  const ts = now();
   const nextId = uuid();
-  db.exec("BEGIN");
-  try {
-    db.prepare("UPDATE edge_versions SET status = 'superseded' WHERE edge_id = ? AND status = 'approved'").run(edgeId);
-    db.prepare("UPDATE edge_versions SET status = 'approved', approved_at = ? WHERE id = ?").run(ts, draft.id);
-    db.prepare("UPDATE edges SET active_version_id = ?, updated_at = ? WHERE id = ?").run(draft.id, ts, edgeId);
-    db.prepare(
-      `INSERT INTO edge_versions (id, edge_id, version_number, status, source_text, created_at)
-       VALUES (?, ?, ?, 'draft', ?, ?)`
-    ).run(nextId, edgeId, draft.version_number + 1, draft.source_text, ts);
-    insertItems(nextId, items);
-    db.exec("COMMIT");
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
+  await db.tx(async (t) => {
+    await t.run(
+      "UPDATE checklist_versions SET status = 'superseded' WHERE checklist_id = ? AND status = 'approved'",
+      edgeId
+    );
+    await t.run(
+      "UPDATE checklist_versions SET status = 'approved', approved_at = now() WHERE id = ? AND status = 'draft'",
+      draft.id
+    );
+    await t.run("UPDATE checklists SET active_version_id = ? WHERE id = ?", draft.id, edgeId);
+    await t.run(
+      `INSERT INTO checklist_versions (id, checklist_id, user_id, version_number, status, source_text)
+       VALUES (?, ?, ?, ?, 'draft', ?)`,
+      nextId,
+      edgeId,
+      draft.user_id,
+      draft.version_number + 1,
+      draft.source_text
+    );
+    await insertItems(t, draft.user_id, nextId, items);
+  });
   return { approvedVersionNumber: draft.version_number };
 }
 
