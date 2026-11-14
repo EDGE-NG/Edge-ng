@@ -33,8 +33,8 @@ The server connects to Postgres directly, which bypasses row-level security, so 
 
 ```
 # Supabase (Project Settings → API, and Connect → Transaction pooler)
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 DATABASE_URL=
 

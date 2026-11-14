@@ -10,15 +10,20 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
+/**
+ * Supabase settings are only used on the server, so they are read under
+ * private names (no NEXT_PUBLIC_ prefix, never sent to the browser). The old
+ * NEXT_PUBLIC_ names still work as a fallback.
+ */
 export function supabaseUrl(): string {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set");
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) throw new Error("SUPABASE_URL is not set");
   return url;
 }
 
 export function anonKey(): string {
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!key) throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
+  const key = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!key) throw new Error("SUPABASE_ANON_KEY is not set");
   return key;
 }
 
