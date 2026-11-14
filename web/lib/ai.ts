@@ -1,6 +1,6 @@
 /**
- * AI provider adapters — Groq (primary) and OpenRouter (fallback).
- * Both expose OpenAI-compatible chat-completions APIs.
+ * AI provider adapters: Groq (text), Google Gemini (images, and text fallback), OpenRouter (last fallback).
+ * All three expose OpenAI-compatible chat-completions APIs.
  * Keys stay server-side; the client never sees them.
  *
  * Every call (PRD REQ-LLM-1, REQ-LLM-10, REQ-LLM-12):
@@ -66,6 +66,10 @@ interface ProviderConfig {
   key: string | undefined;
   textModel: string;
   visionModel: string;
+  /** Provider-specific request fields. */
+  extraBody?: Record<string, unknown>;
+  /** Output cap for image calls (thinking models need room before the answer). */
+  visionMaxTokens?: number;
 }
 
 const PROVIDERS: ProviderConfig[] = [
@@ -76,6 +80,19 @@ const PROVIDERS: ProviderConfig[] = [
     textModel: process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
     // Groq serves no vision model on this key — vision calls go to OpenRouter
     visionModel: process.env.GROQ_VISION_MODEL || "",
+  },
+  {
+    // Google Gemini through its OpenAI-compatible endpoint, on the Gemini API
+    // free tier (key from aistudio.google.com/apikey). Groq has no vision model,
+    // so image calls come here first; text calls use it as a free fallback.
+    name: "google",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    key: process.env.GEMINI_API_KEY,
+    textModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    visionModel: process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash",
+    // keep Gemini 2.5's built-in thinking short, so the answer fits and comes back fast
+    extraBody: { reasoning_effort: "low" },
+    visionMaxTokens: 4096,
   },
   {
     name: "openrouter",
@@ -120,8 +137,8 @@ export async function chat(messages: ChatMessage[], opts: AIOptions = {}): Promi
   if (candidates.length === 0) {
     throw new Error(
       vision
-        ? "No vision-capable AI provider configured. Set OPENROUTER_API_KEY in .env.local"
-        : "No AI provider configured. Set GROQ_API_KEY or OPENROUTER_API_KEY in .env.local"
+        ? "No vision-capable AI provider configured. Set GEMINI_API_KEY (or OPENROUTER_API_KEY)."
+        : "No AI provider configured. Set GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY."
     );
   }
 
@@ -148,7 +165,8 @@ export async function chat(messages: ChatMessage[], opts: AIOptions = {}): Promi
           temperature: 0.2,
           // Explicit caps: some providers default to 65535 max_tokens, which
           // trips OpenRouter's "can you afford this request" check on low credits.
-          max_tokens: vision ? 1024 : 4096,
+          max_tokens: vision ? p.visionMaxTokens ?? 1024 : 4096,
+          ...p.extraBody,
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });
