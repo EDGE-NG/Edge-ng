@@ -13,6 +13,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chatJson } from "./ai";
 import { db, json, uuid } from "./db";
 import { loadItems, type Rule } from "./edge-builder";
+import { prepareForModel, toDataUrl } from "./model-images";
 import { getObject, putObject, removeObject, type Bucket } from "./supabase";
 
 export const MAX_IMAGES_PER_RULE = 6;
@@ -170,6 +171,9 @@ export interface Reading {
   problem: string | null;
 }
 
+/** Bump when READ_PROMPT or its JSON shape changes (REQ-LLM-1). */
+export const READ_PROMPT_VERSION = "image_interpret/v1";
+
 const READ_PROMPT = `You are Edge's chart reader inside a trading-discipline app.
 A trader is teaching you what one of THEIR checklist rules looks like on a chart.
 They uploaded a chart image and labelled it as a VALID or an INVALID example of the rule.
@@ -212,7 +216,9 @@ export async function readImage(args: {
   data: Buffer;
 }): Promise<Reading> {
   const { rule, polarity, note } = args;
-  const raw = await chatJson<Partial<Reading>>(
+  // REQ-LLM-9: the model gets a downscaled copy; the stored original is untouched
+  const img = await prepareForModel(args.data, args.mime);
+  const { data: raw } = await chatJson<Partial<Reading>>(
     [
       { role: "system", content: READ_PROMPT },
       {
@@ -225,11 +231,19 @@ export async function readImage(args: {
               `<label>${polarity === "valid" ? "VALID example (the rule is met)" : "INVALID example (the rule is NOT met)"}</label>\n` +
               `<trader_note>\n${note || "(none)"}\n</trader_note>`,
           },
-          { type: "image_url", image_url: { url: `data:${args.mime};base64,${args.data.toString("base64")}` } },
+          { type: "image_url", image_url: { url: toDataUrl(img) } },
         ],
       },
     ],
-    { userId: args.userId, feature: "image_interpret" }
+    {
+      userId: args.userId,
+      feature: "image_interpret",
+      promptVersion: READ_PROMPT_VERSION,
+      guard: {
+        texts: (v) => [v.reading, v.why, v.problem, ...(Array.isArray(v.features) ? v.features.map(String) : [])],
+        ownWords: [rule.text, note ?? ""],
+      },
+    }
   );
   const str = (v: unknown, max = 600) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 

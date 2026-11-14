@@ -19,10 +19,20 @@ import { db, json, now, uuid } from "./db";
 import type { Rule } from "./edge-builder";
 import { activeImages, readFile, type EvidenceImage } from "./evidence";
 import { computeIndicator, indicatorLabel, type Candle, type IndicatorSpec, type Timeframe } from "./market";
+import { cachedForModel, toDataUrl, type ModelImage } from "./model-images";
 
 export const APPROVAL_SECONDS = 60; // REQ-GT-3
-export const FRAME_MAX_AGE_MS = 30_000; // REQ-LLM-5: frames older than this are stale at the gate
-export const CHECK_STALE_MS = 15 * 60_000; // a check on another timeframe stays usable this long
+/**
+ * REQ-LLM-5: at the gate, a chart check counts only if it was made within
+ * this window before Buy / Sell was pressed. Older ones are re-run first.
+ */
+export const FRAME_MAX_AGE_MS = 30_000;
+/** In the live panel (not the gate), a check stays on display this long, shown with its age. */
+export const CHECK_STALE_MS = 15 * 60_000;
+/** Time limit per provider for one rule check: keeps the gate inside REQ-GT-4. */
+export const RULE_CHECK_TIMEOUT_MS = 12_000;
+/** Bump when CHECK_PROMPT or its JSON shape changes (REQ-LLM-1). */
+export const CHECK_PROMPT_VERSION = "rule_check/v2";
 const CANDLES_FOR_MODEL = 80;
 
 export type Result = "pass" | "fail" | "inconclusive";
@@ -130,6 +140,9 @@ export interface Check {
   frameId: string | null;
   evidence: { candleRange?: [number, number]; referenceImageIds?: string[] } | null;
   checkedAt: string;
+  /** For LLM checks: the model, and the llm_runs row that holds the prompt version (REQ-GT-5). */
+  model?: string | null;
+  llmRunId?: string | null;
 }
 
 /** Code-evaluated risk rules (PR-GT-3, REQ-GT-2). */
@@ -194,7 +207,7 @@ interface ModelCheck {
 const CHECK_PROMPT = `You are Edge's chart checker in a trading-discipline app.
 You check ONE rule from the trader's own checklist against their live chart.
 
-You get: the rule, the trader's confirmed example images for this rule (valid = rule met, invalid = rule broken) with their descriptions, the live chart image, and the exact candle data (OHLC) with indicator values. Candles are numbered; the LAST candle is the most recent and may still be forming.
+You get: the rule, the trader's confirmed example images for this rule (valid = rule met, invalid = rule broken) with their descriptions, the live chart image when there is one, and the exact candle data (OHLC) with indicator values. Candles are numbered; the LAST candle is the most recent and may still be forming. If there is no live chart image, judge from the candle data alone.
 
 How to judge:
 - Compare the live chart with the rule and the trader's examples. Their examples define what the rule means to THEM.
@@ -265,7 +278,8 @@ export async function checkChartRule(args: {
   userId: string;
   edgeId: string;
   rule: Rule;
-  frame: { id: string; timeframe: Timeframe; image: Buffer | null; candles: Candle[]; indicators: IndicatorSpec[]; decimals: number };
+  /** `image` is already prepared for the model; null = candle data only (source B). */
+  frame: { id: string; timeframe: Timeframe; image: ModelImage | null; candles: Candle[]; indicators: IndicatorSpec[]; decimals: number };
   ticket: Ticket | null;
 }): Promise<Check> {
   const { rule, frame } = args;
@@ -317,7 +331,8 @@ export async function checkChartRule(args: {
       type: "text",
       text:
         `<rule>${rule.text}${rule.required_timeframe ? ` (timeframe: ${rule.required_timeframe})` : ""}</rule>\n` +
-        `<chart>timeframe ${frame.timeframe}; last price ${fmt(lastClose, frame.decimals)}</chart>\n` +
+        `<chart>timeframe ${frame.timeframe}; last price ${fmt(lastClose, frame.decimals)}` +
+        `${frame.image ? "" : "; no chart image for this view, judge from the candle data only"}</chart>\n` +
         (args.ticket
           ? `<ticket>${args.ticket.side} at ${args.ticket.entry}${args.ticket.stop != null ? `, stop ${args.ticket.stop}` : ""}${args.ticket.target != null ? `, target ${args.ticket.target}` : ""}</ticket>\n`
           : "") +
@@ -326,35 +341,56 @@ export async function checkChartRule(args: {
           .join("\n")}\n</examples>\n<candles>\n${table.text}\n</candles>`,
     },
   ];
-  // the trader's confirmed examples (cached on disk), then the live frame
-  for (const e of examples.slice(0, 6)) {
+  // the trader's confirmed examples (downscaled and cached, REQ-LLM-9), examples
+  // on this timeframe first, then the live frame
+  const onThisTf = (e: EvidenceImage) => normalizeTimeframe(e.reading?.timeframe) === frame.timeframe;
+  const ordered = [...examples].sort((a, b) => Number(onThisTf(b)) - Number(onThisTf(a)));
+  for (const e of ordered.slice(0, 6)) {
     const row = await db.one<{ object_key: string; mime_type: string }>(
-      "SELECT object_key, mime_type FROM evidence_images WHERE id = ?",
-      e.id
+      "SELECT object_key, mime_type FROM evidence_images WHERE id = ? AND user_id = ?",
+      e.id,
+      args.userId
     );
     if (!row) continue;
     try {
-      const data = await readFile(row.object_key);
+      const img = await cachedForModel(row.object_key, () => readFile(row.object_key), row.mime_type);
       content.push({ type: "text", text: `Example ${e.id} (${e.polarity}):` });
-      content.push({ type: "image_url", image_url: { url: `data:${row.mime_type};base64,${data.toString("base64")}` } });
+      content.push({ type: "image_url", image_url: { url: toDataUrl(img) } });
     } catch {
       /* file missing: skip this example */
     }
   }
   if (frame.image) {
     content.push({ type: "text", text: "LIVE CHART (check this one):" });
-    content.push({ type: "image_url", image_url: { url: `data:image/png;base64,${frame.image.toString("base64")}` } });
+    content.push({ type: "image_url", image_url: { url: toDataUrl(frame.image) } });
   }
 
   let raw: ModelCheck;
+  let llm: { model: string; llmRunId: string | null };
   try {
-    raw = await chatJson<ModelCheck>(
+    const res = await chatJson<ModelCheck>(
       [
         { role: "system", content: CHECK_PROMPT },
         { role: "user", content },
       ],
-      { userId: args.userId, feature: "rule_check" }
+      {
+        userId: args.userId,
+        feature: "rule_check",
+        promptVersion: CHECK_PROMPT_VERSION,
+        timeoutMs: RULE_CHECK_TIMEOUT_MS,
+        // REQ-LLM-12: what the trader reads never predicts
+        guard: {
+          texts: (v) => [
+            v.reasoning,
+            v.missing_view,
+            ...(Array.isArray(v.observed_facts) ? v.observed_facts.map(String) : []),
+          ],
+          ownWords: [rule.text, ...examples.map((e) => e.interpretation_text ?? "")],
+        },
+      }
     );
+    raw = res.data;
+    llm = { model: `${res.provider}:${res.model}`, llmRunId: res.runId };
   } catch (err) {
     // REQ-LLM-2: a failure is never treated as a pass
     console.error("[workspace] rule check failed:", err);
@@ -376,6 +412,7 @@ export async function checkChartRule(args: {
     if (!g.ok) {
       return {
         ...base,
+      ...llm,
         result: "inconclusive",
         observed: facts.slice(0, 600),
         reasoning: `Edge's reading couldn't be verified against the price data (${g.why}), so it isn't used.`,
@@ -386,12 +423,15 @@ export async function checkChartRule(args: {
     }
     // low confidence never passes a rule
     if (confidence === "low") {
-      return { ...base, result: "inconclusive", observed: facts.slice(0, 600), reasoning: reasoning || "Edge isn't confident enough to call this.", confidence, missing: raw.missing_view?.slice(0, 120) || "a clearer view", evidence: { candleRange: g.range, referenceImageIds: refs } };
+      return { ...base,
+      ...llm, result: "inconclusive", observed: facts.slice(0, 600), reasoning: reasoning || "Edge isn't confident enough to call this.", confidence, missing: raw.missing_view?.slice(0, 120) || "a clearer view", evidence: { candleRange: g.range, referenceImageIds: refs } };
     }
-    return { ...base, result, observed: facts.slice(0, 600), reasoning, confidence, missing: null, evidence: { candleRange: g.range, referenceImageIds: refs } };
+    return { ...base,
+      ...llm, result, observed: facts.slice(0, 600), reasoning, confidence, missing: null, evidence: { candleRange: g.range, referenceImageIds: refs } };
   }
   return {
     ...base,
+      ...llm,
     result,
     observed: facts.slice(0, 600),
     reasoning: reasoning || "Edge can't tell from this view.",
@@ -411,15 +451,19 @@ export async function saveCheck(
 ): Promise<void> {
   // the frame id is only kept when that frame was stored for this session
   await db.run(
-    `INSERT INTO rule_checks (id, user_id, session_id, item_key, frame_id, result, observed_facts, reasoning,
+    `INSERT INTO rule_checks (id, user_id, session_id, item_key, frame_id, llm_run_id, result, observed_facts, reasoning,
        confidence_band, evidence, missing_evidence, is_hard_gate, source, model, checked_at, stale_after)
-     VALUES (?, ?, ?, ?, (SELECT id FROM chart_frames WHERE id = ? AND session_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, (SELECT id FROM chart_frames WHERE id = ? AND session_id = ?),
+       (SELECT id FROM llm_runs WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     uuid(),
     s.user_id,
     s.id,
     c.itemKey,
     c.frameId,
     s.id,
+    // links the check to its run: model, prompt version, latency (REQ-LLM-1, REQ-GT-5)
+    c.llmRunId ?? null,
+    s.user_id,
     c.result,
     c.observed ? { text: c.observed } : null,
     c.reasoning,
@@ -428,7 +472,7 @@ export async function saveCheck(
     c.missing,
     hardGate,
     c.source,
-    model,
+    c.model ?? model,
     c.checkedAt,
     new Date(Date.parse(c.checkedAt) + CHECK_STALE_MS).toISOString()
   );
@@ -461,6 +505,9 @@ export async function latestChecks(sessionId: string): Promise<Map<string, Check
       frameId: (r.frame_id as string) ?? null,
       evidence: { candleRange: ev.candleRange, referenceImageIds: ev.referenceImageIds },
       checkedAt: String(r.checked_at),
+      // carried into the gate decision snapshot (REQ-GT-5)
+      model: (r.model as string) ?? null,
+      llmRunId: (r.llm_run_id as string) ?? null,
     });
   }
   return out;
@@ -497,10 +544,15 @@ export function rollUp(states: RuleState[]): {
 
 /** Plain-language reason per rule for the decision card (PR-GT-2, PR-GT-8). */
 export function reasonFor(s: RuleState): string {
+  // stale is checked first: a stale rule is also "unchecked"
+  if (s.stale) {
+    return s.rule.required_timeframe
+      ? `The last check is too old. Show the ${s.rule.required_timeframe} chart again.`
+      : "The last check is too old. Show this view again.";
+  }
   if (s.status === "unchecked") {
     if (s.mode === "trader") return "Confirm this yourself before trading.";
     return s.check?.missing ? `Edge still needs ${s.check.missing}.` : "Not checked yet.";
   }
-  if (s.stale) return "The last check is too old. Show this view again.";
   return s.check?.reasoning || s.check?.missing || "";
 }

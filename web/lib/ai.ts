@@ -2,12 +2,28 @@
  * AI provider adapters — Groq (primary) and OpenRouter (fallback).
  * Both expose OpenAI-compatible chat-completions APIs.
  * Keys stay server-side; the client never sees them.
+ *
+ * Every call (PRD REQ-LLM-1, REQ-LLM-10, REQ-LLM-12):
+ *  - has a time limit per provider, so a hung provider falls through to the
+ *    fallback instead of hanging the gate;
+ *  - is recorded in llm_runs with job, provider, model, prompt version,
+ *    latency and outcome (failed attempts too);
+ *  - when it returns text the trader will read, is scanned for prediction
+ *    wording; a hit is regenerated once, and refused if it still predicts.
  */
 import { db, uuid } from "./db";
+import { findInAll, PredictionLanguageError } from "./guardrail";
+
+/** Default time limit per provider attempt. Callers on the gate path pass less. */
+export const DEFAULT_TIMEOUT_MS = 20_000;
 
 const JOBS = ["plan_extract", "plan_patch", "image_interpret", "rule_check", "journal", "digest", "transcribe"];
 
-/** Record a model call in llm_runs (PRD 5.6, REQ-LLM-1). Never breaks the main flow. */
+/**
+ * Record a model call in llm_runs (PRD 5.6, REQ-LLM-1), including failed
+ * attempts. Returns the run id (null if it could not be stored). Never breaks
+ * the main flow.
+ */
 export async function recordRun(r: {
   userId?: string | null;
   job: string;
@@ -16,22 +32,31 @@ export async function recordRun(r: {
   tokensIn?: number | null;
   tokensOut?: number | null;
   latencyMs?: number | null;
-}): Promise<void> {
+  promptVersion?: string | null;
+  status?: "ok" | "invalid_output" | "error" | "timeout";
+  errorCode?: string | null;
+}): Promise<string | null> {
+  const id = uuid();
   try {
     await db.run(
-      `INSERT INTO llm_runs (id, user_id, job, provider, model, status, latency_ms, tokens_in, tokens_out)
-       VALUES (?, ?, ?, ?, ?, 'ok', ?, ?, ?)`,
-      uuid(),
+      `INSERT INTO llm_runs (id, user_id, job, provider, model, prompt_version, status, error_code, latency_ms, tokens_in, tokens_out)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id,
       r.userId ?? null,
       JOBS.includes(r.job) ? r.job : "plan_extract",
       r.provider,
       r.model,
+      r.promptVersion ?? null,
+      r.status ?? "ok",
+      r.errorCode ? r.errorCode.slice(0, 300) : null,
       r.latencyMs ?? null,
       r.tokensIn ?? null,
       r.tokensOut ?? null
     );
+    return id;
   } catch (err) {
     console.error("[ai] could not record the model run:", err);
+    return null;
   }
 }
 
@@ -70,6 +95,17 @@ export interface AIResult {
   text: string;
   provider: string;
   model: string;
+  /** llm_runs id of this call (null if it could not be recorded). */
+  runId: string | null;
+}
+
+export interface AIOptions {
+  userId?: string;
+  /** The PRD job: plan_extract, image_interpret, rule_check, ... */
+  feature?: string;
+  /** Version of the prompt and output schema used, recorded on every run. */
+  promptVersion?: string;
+  timeoutMs?: number;
 }
 
 function hasVision(messages: ChatMessage[]): boolean {
@@ -78,10 +114,7 @@ function hasVision(messages: ChatMessage[]): boolean {
   );
 }
 
-export async function chat(
-  messages: ChatMessage[],
-  opts: { userId?: string; feature?: string } = {}
-): Promise<AIResult> {
+export async function chat(messages: ChatMessage[], opts: AIOptions = {}): Promise<AIResult> {
   const vision = hasVision(messages);
   const candidates = PROVIDERS.filter((p) => p.key && (!vision || p.visionModel));
   if (candidates.length === 0) {
@@ -92,6 +125,12 @@ export async function chat(
     );
   }
 
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const run = {
+    userId: opts.userId,
+    job: opts.feature ?? "plan_extract",
+    promptVersion: opts.promptVersion ?? null,
+  };
   const errors: string[] = [];
   for (const p of candidates) {
     const model = vision ? p.visionModel : p.textModel;
@@ -111,6 +150,7 @@ export async function chat(
           // trips OpenRouter's "can you afford this request" check on low credits.
           max_tokens: vision ? 1024 : 4096,
         }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         const body = await res.text();
@@ -119,19 +159,28 @@ export async function chat(
       const data = await res.json();
       const text: string = data.choices?.[0]?.message?.content ?? "";
       const usage = data.usage ?? {};
-      await recordRun({
-        userId: opts.userId,
-        job: opts.feature ?? "plan_extract",
+      const runId = await recordRun({
+        ...run,
         provider: p.name,
         model,
         tokensIn: usage.prompt_tokens,
         tokensOut: usage.completion_tokens,
         latencyMs: Date.now() - started,
       });
-      return { text, provider: p.name, model };
+      return { text, provider: p.name, model, runId };
     } catch (err) {
+      const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+      const msg = timedOut ? `timed out after ${timeoutMs} ms` : err instanceof Error ? err.message : String(err);
+      await recordRun({
+        ...run,
+        provider: p.name,
+        model,
+        status: timedOut ? "timeout" : "error",
+        errorCode: msg,
+        latencyMs: Date.now() - started,
+      });
       // record this provider's failure and try the next one
-      errors.push(`${p.name}(${model}): ${err instanceof Error ? err.message : String(err)}`);
+      errors.push(`${p.name}(${model}): ${msg}`);
     }
   }
   throw new Error(`All AI providers failed -> ${errors.join(" | ")}`);
@@ -191,29 +240,88 @@ function escapeNewlinesInStrings(s: string): string {
   return out;
 }
 
+export interface JsonOptions<T> extends AIOptions {
+  /**
+   * Language guardrail (REQ-LLM-12): `texts` picks the fields the trader will
+   * read; `ownWords` are the trader's own phrases, which are not flagged.
+   */
+  guard?: { texts: (value: T) => Array<string | null | undefined>; ownWords?: string[] };
+}
+
+export interface JsonResult<T> {
+  data: T;
+  provider: string;
+  model: string;
+  promptVersion: string | null;
+  /** llm_runs id of the call that produced `data`. */
+  runId: string | null;
+}
+
 /**
  * Call the AI and parse JSON, retrying once with a correction if the model
- * returns malformed JSON (common with quotes inside string values).
+ * returns malformed JSON (common with quotes inside string values). With a
+ * guard, a reply that predicts is regenerated once; if it still predicts,
+ * PredictionLanguageError is thrown so the caller treats it as a failure
+ * (never as a pass).
  */
-export async function chatJson<T>(
-  messages: ChatMessage[],
-  opts: { userId?: string; feature?: string } = {}
-): Promise<T> {
-  const res = await chat(messages, opts);
-  try {
-    return parseJson<T>(res.text);
-  } catch {
-    const corrected: ChatMessage[] = [
-      ...messages,
-      { role: "assistant", content: res.text },
-      {
-        role: "user",
-        content:
-          "Your response was not valid JSON (a quote or newline inside a string was not escaped). " +
-          "Resend the SAME content as one valid JSON object only. Escape all quotes and newlines inside strings.",
-      },
-    ];
-    const retry = await chat(corrected, opts);
-    return parseJson<T>(retry.text);
+export async function chatJson<T>(messages: ChatMessage[], opts: JsonOptions<T> = {}): Promise<JsonResult<T>> {
+  const { guard, ...callOpts } = opts;
+
+  const parsed = async (msgs: ChatMessage[]): Promise<{ value: T; text: string; res: AIResult }> => {
+    const res = await chat(msgs, callOpts);
+    try {
+      return { value: parseJson<T>(res.text), text: res.text, res };
+    } catch {
+      const corrected: ChatMessage[] = [
+        ...msgs,
+        { role: "assistant", content: res.text },
+        {
+          role: "user",
+          content:
+            "Your response was not valid JSON (a quote or newline inside a string was not escaped). " +
+            "Resend the SAME content as one valid JSON object only. Escape all quotes and newlines inside strings.",
+        },
+      ];
+      const retry = await chat(corrected, callOpts);
+      return { value: parseJson<T>(retry.text), text: retry.text, res: retry };
+    }
+  };
+
+  let out = await parsed(messages);
+  if (guard) {
+    const hit = findInAll(guard.texts(out.value), guard.ownWords);
+    if (hit) {
+      out = await parsed([
+        ...messages,
+        { role: "assistant", content: out.text },
+        {
+          role: "user",
+          content:
+            `Your reply used prediction or advice wording ("${hit}"). Edge never predicts price moves or profit, ` +
+            `never rates a trade as good or bad, and never recommends a trade; it only says what the chart shows ` +
+            `and whether the trader's own rule is met. Resend the SAME JSON with neutral, factual wording.`,
+        },
+      ]);
+      const again = findInAll(guard.texts(out.value), guard.ownWords);
+      if (again) {
+        await recordRun({
+          userId: callOpts.userId,
+          job: callOpts.feature ?? "plan_extract",
+          provider: out.res.provider,
+          model: out.res.model,
+          promptVersion: callOpts.promptVersion ?? null,
+          status: "invalid_output",
+          errorCode: `guardrail blocked: "${again}"`,
+        });
+        throw new PredictionLanguageError(again);
+      }
+    }
   }
+  return {
+    data: out.value,
+    provider: out.res.provider,
+    model: out.res.model,
+    promptVersion: callOpts.promptVersion ?? null,
+    runId: out.res.runId,
+  };
 }

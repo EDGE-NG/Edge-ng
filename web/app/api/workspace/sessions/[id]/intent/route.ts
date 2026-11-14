@@ -12,7 +12,7 @@ import {
   type Check,
   type Ticket,
 } from "@/lib/workspace";
-import { getSession, processFrame, ruleStates, sessionRules, tradesToday } from "@/lib/workspace-session";
+import { getSession, refreshForGate, ruleStates, sessionRules, tradesToday } from "@/lib/workspace-session";
 
 const PRICE_TOLERANCE = 0.0015; // 0.15% of price (REQ-GT-3)
 
@@ -65,15 +65,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!TIMEFRAMES.includes(tf)) return NextResponse.json({ error: "Unknown timeframe." }, { status: 400 });
 
   const inst = findInstrument(s.instrument)!;
-  // fresh frame + current price at the press of the button (PRD 5.5 step 8)
+  // fresh frame + current price at the press of the button (PRD 5.5 step 8).
+  // Chart checks count only if made within FRAME_MAX_AGE_MS of this press
+  // (REQ-LLM-5); hard-gate rules on other timeframes are re-checked now.
   let lastPrice: number;
   let cannotCheck: string | null = null;
+  let freshAfter = Date.now();
   try {
     const image =
       typeof b.image === "string" && b.image.startsWith("data:image/png;base64,")
         ? Buffer.from(b.image.slice(22), "base64")
         : null;
-    await processFrame(s, { timeframe: tf, image, ticket });
+    const refreshed = await refreshForGate(s, { timeframe: tf, image, ticket });
+    freshAfter = refreshed.freshAfter;
+    if (refreshed.failed.length) {
+      cannotCheck = refreshed.failed.map((f) => `${f.timeframe}: ${f.message}`).join(" ");
+    }
     const candles = await getCandles(inst, tf, 300);
     lastPrice = candles[candles.length - 1].close;
   } catch (err) {
@@ -89,7 +96,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   for (const r of rules) {
     if (ruleMode(r, risk) === "code") codeChecks.set(r.item_key!, evaluateRiskRule(r, risk, ticket, today));
   }
-  const states = await ruleStates(s, codeChecks);
+  const states = await ruleStates(s, codeChecks, { freshAfter });
   const roll = rollUp(states);
   const m = ticketMath(ticket);
 

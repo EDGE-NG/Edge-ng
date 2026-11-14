@@ -44,6 +44,9 @@ export interface DraftState {
 
 /* --------------------------------------------------------------- prompt -- */
 
+/** Bump when SYSTEM_PROMPT or its JSON shape changes (REQ-LLM-1). */
+export const PLAN_PROMPT_VERSION = "plan_extract/v1";
+
 const SYSTEM_PROMPT = `You are Edge, the plan builder inside a trading-discipline app.
 Traders describe their trading plan ("edge") in their own words, typed or spoken.
 Your job: turn what they said into a checklist of rules they can approve.
@@ -213,7 +216,7 @@ export async function buildFromConversation(args: {
         .join("\n")
     : "(no checklist yet)";
 
-  const ai = await chatJson<AIResponse>(
+  const { data: ai } = await chatJson<AIResponse>(
     [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -224,7 +227,17 @@ export async function buildFromConversation(args: {
           `Respond to the LAST trader message.`,
       },
     ],
-    { userId: args.userId, feature: "plan_extract" }
+    {
+      userId: args.userId,
+      feature: "plan_extract",
+      promptVersion: PLAN_PROMPT_VERSION,
+      // REQ-LLM-12: Edge's own reply and questions never predict; phrases the
+      // trader used themselves are theirs, so they are not flagged.
+      guard: {
+        texts: (v) => [v.reply, ...(Array.isArray(v.questions) ? v.questions.map(String) : [])],
+        ownWords: [...traderMessages, ...current.map((r) => r.text)],
+      },
+    }
   );
 
   const intentRaw = String(ai.intent ?? "");

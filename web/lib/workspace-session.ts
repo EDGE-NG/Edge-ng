@@ -7,12 +7,15 @@ import {
   findInstrument,
   getCandles,
   indicatorsFromRules,
+  MarketError,
   type IndicatorSpec,
   type Timeframe,
 } from "./market";
+import { prepareForModel } from "./model-images";
 import {
   CHECK_STALE_MS,
   checkChartRule,
+  FRAME_MAX_AGE_MS,
   latestChecks,
   normalizeTimeframe,
   parseRiskParams,
@@ -67,15 +70,24 @@ export async function sessionRules(s: SessionRow): Promise<{ rules: Rule[]; risk
   return { rules, risk, indicators: indicatorsFromRules(rules.map((r) => r.text)) };
 }
 
-/** Rule states for the panel / gate. Code rules need a ticket (else "unchecked"). */
-export async function ruleStates(s: SessionRow, codeChecks?: Map<string, Check>): Promise<RuleState[]> {
+/**
+ * Rule states for the panel / gate. Code rules need a ticket (else "unchecked").
+ * `freshAfter` (epoch ms) is the gate's stricter cut-off: a chart check made
+ * before it is stale and counts as unchecked (REQ-LLM-5). Without it, the
+ * panel's display window applies.
+ */
+export async function ruleStates(
+  s: SessionRow,
+  codeChecks?: Map<string, Check>,
+  opts: { freshAfter?: number } = {}
+): Promise<RuleState[]> {
   const { rules, risk } = await sessionRules(s);
   const latest = await latestChecks(s.id);
-  const t = Date.now();
+  const cutoff = opts.freshAfter ?? Date.now() - CHECK_STALE_MS;
   return rules.map((rule) => {
     const mode = ruleMode(rule, risk);
     const check = mode === "code" ? codeChecks?.get(rule.item_key!) ?? null : latest.get(rule.item_key!) ?? null;
-    const stale = Boolean(check && mode === "chart" && t - Date.parse(check.checkedAt) > CHECK_STALE_MS);
+    const stale = Boolean(check && mode === "chart" && Date.parse(check.checkedAt) < cutoff);
     let status: RuleState["status"] = check ? check.result : "unchecked";
     if (mode === "trader" && check?.result !== "pass") status = "unchecked";
     if (stale) status = "unchecked";
@@ -160,7 +172,17 @@ export async function startSession(userId: string, edgeId: string, instrument: s
  */
 export async function processFrame(
   s: SessionRow,
-  args: { timeframe: Timeframe; image: Buffer | null; visibleFrom?: number; visibleTo?: number; ticket?: Ticket | null; force?: boolean }
+  args: {
+    timeframe: Timeframe;
+    /** PNG from Edge's own chart (source A); null = candle data only (source B). */
+    image: Buffer | null;
+    visibleFrom?: number;
+    visibleTo?: number;
+    ticket?: Ticket | null;
+    force?: boolean;
+    /** Reuse the last frame on this timeframe only if it is younger than this. */
+    maxReuseMs?: number;
+  }
 ): Promise<{ frameId: string; dataAge: number; reused: boolean }> {
   const inst = findInstrument(s.instrument)!;
   const candles = await getCandles(inst, args.timeframe, 300);
@@ -174,7 +196,7 @@ export async function processFrame(
     s.id,
     args.timeframe
   );
-  if (!args.force && prev && Date.now() - Date.parse(prev.captured_at) < 60_000) {
+  if (!args.force && prev && Date.now() - Date.parse(prev.captured_at) < (args.maxReuseMs ?? 60_000)) {
     const prevLast = json<Array<{ time: number; close: number }>>(prev.candles, []).at(-1);
     if (prevLast && prevLast.time === last.time && prevLast.close === last.close) {
       return { frameId: prev.id, dataAge: dataAgeSeconds(candles, args.timeframe), reused: true };
@@ -187,12 +209,13 @@ export async function processFrame(
   await db.run(
     `INSERT INTO chart_frames (id, user_id, session_id, instrument, timeframe, source, visible_from, visible_to,
        indicators, object_key, candles, data_as_of)
-     VALUES (?, ?, ?, ?, ?, 'edge_chart', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     frameId,
     s.user_id,
     s.id,
     s.instrument,
     args.timeframe,
+    args.image ? "edge_chart" : "data_render", // PRD 5.4 source A (Edge's chart) or B (candles)
     epoch(args.visibleFrom),
     epoch(args.visibleTo),
     indicators,
@@ -207,19 +230,75 @@ export async function processFrame(
     const need = normalizeTimeframe(r.required_timeframe);
     return !need || need === args.timeframe;
   });
+  // downscale the live frame once for all rule checks (REQ-LLM-9); the stored
+  // original above is kept for the audit snapshot
+  const modelImage = args.image ? await prepareForModel(args.image, "image/png") : null;
   const checks = await Promise.all(
     targets.map((rule) =>
       checkChartRule({
         userId: s.user_id,
         edgeId: s.edge_id,
         rule,
-        frame: { id: frameId, timeframe: args.timeframe, image: args.image, candles, indicators, decimals: inst.decimals },
+        frame: { id: frameId, timeframe: args.timeframe, image: modelImage, candles, indicators, decimals: inst.decimals },
         ticket: args.ticket ?? null,
       })
     )
   );
   await Promise.all(checks.map((c, i) => saveCheck(s, c, targets[i].hard_gate, "vision")));
   return { frameId, dataAge: dataAgeSeconds(candles, args.timeframe), reused: false };
+}
+
+/** A little under the cut-off, so a reused frame's checks are never already stale. */
+const GATE_REUSE_MS = FRAME_MAX_AGE_MS - 3_000;
+
+/**
+ * Fresh checks at the press of Buy / Sell (PRD 5.5 step 8, REQ-LLM-5).
+ *
+ * The view on screen is checked from its captured frame. Every hard-gate
+ * chart rule that needs a different timeframe, and has no check younger than
+ * FRAME_MAX_AGE_MS, is re-checked from the server's own candles for that
+ * timeframe (source B), so the trader does not have to click through each
+ * timeframe again. A timeframe whose data cannot be loaded leaves its rules
+ * unchecked, which the roll-up turns into Needs evidence, never an approval.
+ *
+ * Returns the cut-off the roll-up must use, and any timeframes that failed.
+ */
+export async function refreshForGate(
+  s: SessionRow,
+  args: { timeframe: Timeframe; image: Buffer | null; ticket: Ticket }
+): Promise<{ freshAfter: number; failed: Array<{ timeframe: string; message: string }> }> {
+  const freshAfter = Date.now() - FRAME_MAX_AGE_MS;
+
+  // 1. the view on screen (errors here are the caller's "cannot check")
+  await processFrame(s, { timeframe: args.timeframe, image: args.image, ticket: args.ticket, maxReuseMs: GATE_REUSE_MS });
+
+  // 2. hard-gate chart rules on other timeframes whose last check is too old
+  const { rules, risk } = await sessionRules(s);
+  const latest = await latestChecks(s.id);
+  const needed = new Set<Timeframe>();
+  for (const r of rules) {
+    if (!r.hard_gate || ruleMode(r, risk) !== "chart") continue;
+    const tf = normalizeTimeframe(r.required_timeframe);
+    if (!tf || tf === args.timeframe) continue;
+    const last = latest.get(r.item_key!);
+    if (!last || Date.parse(last.checkedAt) < freshAfter) needed.add(tf);
+  }
+
+  const failed: Array<{ timeframe: string; message: string }> = [];
+  await Promise.all(
+    [...needed].map(async (tf) => {
+      try {
+        await processFrame(s, { timeframe: tf, image: null, ticket: args.ticket, maxReuseMs: GATE_REUSE_MS });
+      } catch (err) {
+        if (!(err instanceof MarketError)) console.error(`[gate] ${tf} re-check failed:`, err);
+        failed.push({
+          timeframe: tf,
+          message: err instanceof MarketError ? err.message : "Edge couldn't load this timeframe.",
+        });
+      }
+    })
+  );
+  return { freshAfter, failed };
 }
 
 /** Trader confirmation for rules only they can confirm (EC-P6). */
