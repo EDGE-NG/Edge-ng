@@ -401,11 +401,19 @@ html[data-theme="light"] .logo-dark {
   background: transparent;
   resize: none;
   outline: none;
+  border: none;
+  box-shadow: none;
   width: 100%;
   color: var(--color-ink);
   font: inherit;
   font-size: 1rem;
   line-height: 1.55;
+}
+.chat-composer textarea:focus,
+.chat-composer textarea:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 .chat-composer textarea::placeholder {
   color: color-mix(in srgb, var(--color-muted) 80%, transparent);

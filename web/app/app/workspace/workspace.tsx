@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppFrame from "../../_components/app-frame";
+import Dropdown from "../../_components/dropdown";
 import { IconCandles, IconCheck, IconLock, IconX } from "../../_components/icons";
 import ChartView, { type Candle, type ChartHandle, type IndicatorSeries } from "./chart";
 
@@ -266,13 +267,18 @@ export default function Workspace() {
         ) : (
           <>
             {/* PR-TW-1: asset class, instrument, platform */}
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-4 flex flex-wrap items-center gap-2.5">
               {boot.checklists.length > 1 && (
-                <select className="input h-10 w-auto py-0 text-sm" value={edgeId} onChange={(e) => setEdgeId(e.target.value)} aria-label="Checklist">
-                  {boot.checklists.map((c) => (
-                    <option key={c.edgeId} value={c.edgeId}>{c.name} · v{c.versionNumber}</option>
-                  ))}
-                </select>
+                <Dropdown
+                  value={edgeId}
+                  onChange={setEdgeId}
+                  options={boot.checklists.map((c) => ({
+                    value: c.edgeId,
+                    label: `${c.name} · v${c.versionNumber}`,
+                  }))}
+                  className="w-[180px]"
+                  ariaLabel="Checklist"
+                />
               )}
               <div className="flex rounded-full border border-line p-1" role="tablist" aria-label="Market">
                 {(Object.keys(ASSET_LABEL) as Array<keyof typeof ASSET_LABEL>).map((a) => (
@@ -291,15 +297,24 @@ export default function Workspace() {
                   </button>
                 ))}
               </div>
-              <select className="input h-10 w-auto py-0 text-sm" value={symbol} onChange={(e) => setSymbol(e.target.value)} aria-label="Instrument">
-                {filtered.map((i) => (
-                  <option key={i.symbol} value={i.symbol}>{i.label}{i.ready ? "" : " (needs data key)"}</option>
-                ))}
-              </select>
-              <select className="input h-10 w-auto py-0 text-sm" value={platform} onChange={(e) => setPlatform(e.target.value)} aria-label="Platform you trade on">
-                <option value="">Platform you trade on…</option>
-                {PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <Dropdown
+                value={symbol}
+                onChange={setSymbol}
+                options={filtered.map((i) => ({
+                  value: i.symbol,
+                  label: `${i.label}${i.ready ? "" : " (needs data key)"}`,
+                }))}
+                className="w-[160px]"
+                ariaLabel="Instrument"
+              />
+              <Dropdown
+                value={platform}
+                onChange={setPlatform}
+                placeholder="Platform you trade on…"
+                options={PLATFORMS.map((p) => ({ value: p, label: p }))}
+                className="w-[190px]"
+                ariaLabel="Platform you trade on"
+              />
               {view && (
                 <span className="ml-auto text-sm text-ink/70">
                   Checking against <span className="text-ink">{view.session.edgeName}</span>{view.session.versionNumber ? ` · v${view.session.versionNumber}` : ""}

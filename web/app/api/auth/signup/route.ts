@@ -75,6 +75,15 @@ export async function POST(req: Request) {
     if (error.code === "weak_password") {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
+    if (error.code === "over_email_send_rate_limit") {
+      console.error(
+        "[signup] Supabase email rate limit reached. For local development, disable 'Confirm email' in Supabase Auth settings or use admin API."
+      );
+      return NextResponse.json(
+        { error: "Too many sign-ups right now, please try again in a few minutes." },
+        { status: 429 }
+      );
+    }
     console.error("[signup]", error);
     return NextResponse.json({ error: "We couldn't create your account just now. Try again." }, { status: 502 });
   }

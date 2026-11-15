@@ -247,7 +247,7 @@ const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                 send();
               }
             }}
-            className="block min-h-[52px] py-1"
+            className="block w-full min-h-[52px] py-1 bg-transparent resize-none border-none outline-none ring-0 shadow-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none focus-visible:ring-0 focus:shadow-none"
           />
         )}
 

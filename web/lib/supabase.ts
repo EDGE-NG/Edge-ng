@@ -51,6 +51,10 @@ declare global {
   var __edgeAdmin: SupabaseClient | undefined;
 }
 
+export function adminClient(): SupabaseClient {
+  return admin();
+}
+
 function admin(): SupabaseClient {
   if (!globalThis.__edgeAdmin) {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

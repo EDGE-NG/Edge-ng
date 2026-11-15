@@ -18,7 +18,7 @@ export default function AppFrame({
 }) {
   const router = useRouter();
   const { open, toggle } = useSidebar();
-  const [user, setUser] = useState<{ name: string | null; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string | null; email: string; avatarUrl?: string | null } | null>(null);
 
   useEffect(() => {
     let alive = true;

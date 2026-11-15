@@ -1,0 +1,553 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import AppFrame from "../../_components/app-frame";
+import Dropdown from "../../_components/dropdown";
+import { IconCheck, IconGear, IconLock, IconTrash, IconX } from "../../_components/icons";
+
+const TIMEZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Asia/Dubai",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+];
+
+const MARKETS = [
+  { id: "crypto", label: "Cryptocurrency (BTC, ETH, SOL...)" },
+  { id: "forex", label: "Forex (EUR/USD, GBP/USD...)" },
+  { id: "indices", label: "Indices (S&P 500, Nasdaq, DAX...)" },
+];
+
+export default function SettingsView() {
+  const router = useRouter();
+  const [tab, setTab] = useState<"profile" | "billing" | "export" | "danger">("profile");
+
+  // Profile Form State
+  const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
+  const [preferredMarkets, setPreferredMarkets] = useState<string[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Delete Account State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/profile");
+        if (res.ok) {
+          const data = await res.json();
+          if (alive && data.user) {
+            setEmail(data.user.email || "");
+            setDisplayName(data.user.displayName || "");
+            setTimezone(data.user.timezone || "UTC");
+            setPreferredMarkets(data.user.preferredMarkets || []);
+            setAvatarUrl(data.user.avatarUrl || null);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load settings profile", err);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+
+    setUploadingAvatar(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 256;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        setAvatarUrl(dataUrl);
+        setUploadingAvatar(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaveSuccess(false);
+    try {
+      const res = await fetch("/api/settings/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl }),
+      });
+      if (res.ok) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error("Failed to update profile", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleMarket(marketId: string) {
+    setPreferredMarkets((prev) =>
+      prev.includes(marketId) ? prev.filter((m) => m !== marketId) : [...prev, marketId]
+    );
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmation !== "DELETE") return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/settings/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: deleteConfirmation }),
+      });
+      if (res.ok) {
+        router.push("/");
+        router.refresh();
+      } else {
+        const d = await res.json();
+        setDeleteError(d.error || "Failed to delete account");
+      }
+    } catch (err) {
+      setDeleteError("Network error deleting account");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <AppFrame active="settings" title="Settings">
+      <div className="mx-auto w-full max-w-[800px] px-4 py-8 sm:px-6">
+        {/* Navigation Tabs */}
+        <div className="mb-8 border-b border-line">
+          <nav className="-mb-px flex space-x-4 sm:space-x-6 overflow-x-auto whitespace-nowrap scrollbar-none">
+            {(
+              [
+                { id: "profile", label: "Profile & Preferences" },
+                { id: "billing", label: "Billing & Plan" },
+                { id: "export", label: "Data & Export" },
+                { id: "danger", label: "Account Deletion" },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`border-b-2 py-3 text-sm font-medium transition ${
+                  tab === t.id
+                    ? "border-accent text-accent"
+                    : "border-transparent text-muted hover:border-line hover:text-ink"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab 1: Profile & Preferences */}
+        {tab === "profile" && (
+          <section className="card p-6 sm:p-8">
+            <div className="flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-ink">Trader Profile & Preferences</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Configure your timezone and display preferences (PRD 4.8).
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-end sm:self-auto">
+                {saveSuccess && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-pass">
+                    <IconCheck className="h-3.5 w-3.5" /> Saved
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="btn btn-main btn-sm text-xs px-4"
+                >
+                  {saving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-8 text-xs text-muted">Loading preferences...</div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="mt-6 space-y-6">
+                {/* Profile Photo */}
+                <div>
+                  <label className="block text-xs font-medium text-ink">Profile Photo</label>
+                  <div className="mt-3 flex items-center gap-4">
+                    {/* Interactive Avatar Circle with Upload Badge */}
+                    <label
+                      className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-2 ring-line transition hover:ring-accent/70"
+                      title="Click to upload profile photo"
+                    >
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Profile photo"
+                          className="h-full w-full object-cover transition group-hover:opacity-75"
+                        />
+                      ) : (
+                        <span
+                          className="grid h-full w-full place-items-center text-2xl font-semibold text-[#04110a]"
+                          style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                        >
+                          {(displayName || email || "T").trim().charAt(0).toUpperCase()}
+                        </span>
+                      )}
+
+                      {/* Hover Scrim with Camera/Upload Icon */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 transition group-hover:opacity-100">
+                        <svg
+                          className="h-5 w-5 text-accent"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                          />
+                        </svg>
+                        <span className="mt-0.5 text-[10px] font-medium text-white">Upload</span>
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleAvatarFile}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* Explanatory text & actions */}
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span className="font-medium text-ink">
+                        {uploadingAvatar ? "Processing photo…" : "Upload profile photo"}
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        Click the avatar to select an image (JPG, PNG, or WebP).
+                      </span>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl(null)}
+                          className="mt-0.5 w-fit text-[11px] font-medium text-fail hover:underline"
+                        >
+                          Remove photo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-muted">Email Address</label>
+                  <input
+                    type="email"
+                    disabled
+                    value={email}
+                    className="mt-1 w-full rounded-md border border-line bg-track/60 px-3 py-2 text-xs text-muted cursor-not-allowed"
+                  />
+                  <span className="mt-1 block text-[11px] text-muted">
+                    Managed securely via Supabase Auth.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink">Display Name</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Your trader name"
+                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink placeholder:text-muted/60 focus:border-accent focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-ink">Timezone</label>
+                  <div className="mt-1">
+                    <Dropdown
+                      value={timezone}
+                      onChange={setTimezone}
+                      options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+                      className="w-full"
+                      ariaLabel="Timezone"
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-[11px] text-muted">
+                    Timestamps in the journal and workspace will format according to this timezone.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-ink">Preferred Markets</label>
+                  <div className="space-y-2">
+                    {MARKETS.map((m) => {
+                      const checked = preferredMarkets.includes(m.id);
+                      return (
+                        <label
+                          key={m.id}
+                          className="flex cursor-pointer items-center gap-2.5 text-xs text-ink/90"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleMarket(m.id)}
+                            className="rounded border-line bg-surface text-accent focus:ring-accent"
+                          />
+                          <span>{m.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-line pt-4">
+                  <span className="text-xs text-pass">
+                    {saveSuccess && "✓ Preferences saved successfully"}
+                  </span>
+                  <button type="submit" disabled={saving} className="btn btn-main btn-sm text-xs px-4">
+                    {saving ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        )}
+
+        {/* Tab 2: Billing & Plan */}
+        {tab === "billing" && (
+          <section className="card p-6 sm:p-8">
+            <h3 className="text-lg font-medium text-ink">Subscription & Billing</h3>
+            <p className="mt-1 text-xs text-muted">
+              Current membership plan and feature access.
+            </p>
+
+            <div className="mt-6 rounded-lg border border-accent/30 bg-card-a p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="tag tag-pass">Active Plan</span>
+                  <h4 className="mt-2 text-base font-medium text-ink">Edge Preview / Core Demo</h4>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl font-light text-ink">$0</span>
+                  <span className="text-xs text-muted"> / month</span>
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-line pt-4 text-xs text-ink/80">
+                <div className="font-medium text-ink">Included in this preview:</div>
+                <ul className="mt-2 space-y-1.5 text-muted">
+                  <li className="flex items-center gap-2">
+                    <IconCheck className="h-3.5 w-3.5 text-pass" />
+                    <span>Unlimited AI trading plan to checklist generation</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <IconCheck className="h-3.5 w-3.5 text-pass" />
+                    <span>Up to 6 evidence images per rule</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <IconCheck className="h-3.5 w-3.5 text-pass" />
+                    <span>Live multi-timeframe trade workspace & pre-trade gate</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <IconCheck className="h-3.5 w-3.5 text-pass" />
+                    <span>Discipline journal & override recording</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-lg border border-line bg-panel p-4 text-xs text-muted">
+              <p>
+                <strong>Note on Billing:</strong> Paid membership tiers, payment processing, and broker integration are
+                part of future development phases as specified in the project roadmap. No payment method is required
+                during the core loop demo.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 3: Data & Export */}
+        {tab === "export" && (
+          <section className="card p-6 sm:p-8">
+            <h3 className="text-lg font-medium text-ink">Export Your Data</h3>
+            <p className="mt-1 text-xs text-muted">
+              Download a complete machine-readable copy of your checklists, evidence, trade intents, gate decisions, and journal entries (PRD 4.8 / GDPR).
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg border border-line bg-panel p-4 text-xs text-ink/85">
+                <p>The export includes:</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-muted">
+                  <li>Account profile & legal acceptance records</li>
+                  <li>Checklists and all immutable approved versions</li>
+                  <li>Checklist items and rules</li>
+                  <li>Evidence library metadata and AI explanations</li>
+                  <li>All trade intents and pre-trade gate decisions</li>
+                  <li>Recorded overrides with bypassed rules and stated reasons</li>
+                  <li>Full journal reflections and execution notes</li>
+                </ul>
+              </div>
+
+              <div className="pt-2">
+                <a
+                  href="/api/settings/export"
+                  download
+                  className="btn btn-main btn-sm inline-flex items-center gap-2 text-xs"
+                >
+                  <IconGear className="h-3.5 w-3.5" />
+                  Download Full JSON Export
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 4: Account Deletion (Danger Zone) */}
+        {tab === "danger" && (
+          <section className="card border-fail/30 p-6 sm:p-8">
+            <div className="flex items-center gap-2 text-fail">
+              <IconTrash className="h-5 w-5" />
+              <h3 className="text-lg font-medium">Delete Account & Data</h3>
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              Permanently remove your account and all associated checklists, evidence images, decisions, and journal entries.
+            </p>
+
+            <div className="mt-6 rounded-lg border border-fail/20 bg-err-bg/30 p-4 text-xs text-ink/85">
+              <p className="font-semibold text-fail">Warning: This action cannot be undone.</p>
+              <p className="mt-1 text-muted">
+                Once deleted, your account cannot be recovered. In accordance with PRD governance requirements (REQ-GOV), an anonymized deletion receipt is recorded in the immutable audit log for compliance.
+              </p>
+            </div>
+
+            <div className="mt-6 border-t border-line pt-4">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="rounded-md border border-fail/60 bg-fail/10 px-4 py-2 text-xs font-semibold text-fail transition hover:bg-fail/20"
+              >
+                Delete My Account
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-semibold text-fail">Confirm Account Deletion</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="text-muted hover:text-ink"
+                >
+                  <IconX className="h-4 w-4" />
+                </button>
+              </div>
+
+              <p className="mt-3 text-xs text-muted">
+                To confirm permanent deletion of your account and all data, please type <strong className="text-ink">DELETE</strong> below:
+              </p>
+
+              <input
+                type="text"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder="Type DELETE"
+                className="mt-3 w-full rounded-md border border-line bg-panel px-3 py-2 font-mono text-xs text-ink focus:border-fail focus:outline-none"
+              />
+
+              {deleteError && (
+                <div className="mt-2 text-xs text-fail">{deleteError}</div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="btn btn-ghost btn-sm text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteConfirmation !== "DELETE" || deleting}
+                  onClick={handleDeleteAccount}
+                  className="rounded-md bg-fail px-4 py-1.5 text-xs font-semibold text-white transition disabled:opacity-40 hover:bg-fail/90"
+                >
+                  {deleting ? "Deleting..." : "Permanently Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppFrame>
+  );
+}
+

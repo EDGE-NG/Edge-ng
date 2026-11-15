@@ -11,14 +11,28 @@ import { useCallback, useEffect, useState } from "react";
 import EdgeMark from "./edge-mark";
 import { IconBook, IconCandles, IconChecklist, IconGauge, IconGear, IconImages, IconLogout, IconMenu, IconX } from "./icons";
 
-export type Section = "checklist" | "evidence" | "workspace" | "journal" | "dashboard" | "settings";
+export type Section = "dashboard" | "workspace" | "journal" | "checklist" | "evidence" | "settings";
 
-const NAV: Array<{ key: Section; href: string; label: string; Icon: (p: { className?: string }) => React.ReactElement }> = [
-  { key: "checklist", href: "/checklist", label: "Checklist", Icon: IconChecklist },
-  { key: "evidence", href: "/app/evidence", label: "Evidence library", Icon: IconImages },
+interface NavItem {
+  key: Section;
+  href: string;
+  label: string;
+  Icon: (p: { className?: string }) => React.ReactElement;
+}
+
+const PRIMARY_NAV: NavItem[] = [
+  { key: "dashboard", href: "/app", label: "Dashboard", Icon: IconGauge },
   { key: "workspace", href: "/app/workspace", label: "Trade workspace", Icon: IconCandles },
   { key: "journal", href: "/app/journal", label: "Journal", Icon: IconBook },
-  { key: "dashboard", href: "/app", label: "Dashboard", Icon: IconGauge },
+];
+
+const EDGE_NAV: NavItem[] = [
+  { key: "checklist", href: "/checklist", label: "Checklist", Icon: IconChecklist },
+  { key: "evidence", href: "/app/evidence", label: "Evidence library", Icon: IconImages },
+];
+
+const PREFERENCES_NAV: NavItem[] = [
+  { key: "settings", href: "/app/settings", label: "Settings", Icon: IconGear },
 ];
 
 const DESKTOP = "(min-width: 768px)";
@@ -79,7 +93,7 @@ export function MenuButton({ open, onOpen }: { open: boolean | null; onOpen: () 
 
 interface Props {
   active: Section;
-  user: { name: string | null; email: string } | null;
+  user: { name: string | null; email: string; avatarUrl?: string | null } | null;
   open: boolean | null;
   onClose: () => void;
   /** On the Checklist page, "Checklist" resets the page instead of navigating. */
@@ -114,7 +128,7 @@ export default function Sidebar(p: Props) {
         inert={p.open === false || undefined}
       >
         <div className="flex h-16 items-center justify-between px-4">
-          <Link href="/" className="inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em]">
+          <Link href="/app" className="inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em]">
             <EdgeMark className="h-8 w-10" />
             Edge
           </Link>
@@ -124,13 +138,48 @@ export default function Sidebar(p: Props) {
         </div>
 
         <nav className="mt-2 flex-1 space-y-0.5 px-3" aria-label="Sections">
-          {NAV.map(({ key, href, label, Icon }) => {
+          {PRIMARY_NAV.map(({ key, href, label, Icon }) => {
+            const current = p.active === key ? "page" : undefined;
+            return (
+              <Link key={key} href={href} className="side-link" aria-current={current}>
+                <Icon /> {label}
+              </Link>
+            );
+          })}
+
+          <div className="pt-3 pb-1">
+            <div className="border-t border-line/60" />
+            <span className="mt-2.5 block px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
+              Your Edge
+            </span>
+          </div>
+
+          {EDGE_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return key === "checklist" && p.onChecklist ? (
-              <button key={key} type="button" className="side-link" aria-current={current} onClick={p.onChecklist}>
+              <button
+                key={key}
+                type="button"
+                className="side-link"
+                aria-current={current}
+                onClick={p.onChecklist}
+              >
                 <Icon /> {label}
               </button>
             ) : (
+              <Link key={key} href={href} className="side-link" aria-current={current}>
+                <Icon /> {label}
+              </Link>
+            );
+          })}
+
+          <div className="pt-3 pb-1">
+            <div className="border-t border-line/60" />
+          </div>
+
+          {PREFERENCES_NAV.map(({ key, href, label, Icon }) => {
+            const current = p.active === key ? "page" : undefined;
+            return (
               <Link key={key} href={href} className="side-link" aria-current={current}>
                 <Icon /> {label}
               </Link>
@@ -140,27 +189,32 @@ export default function Sidebar(p: Props) {
 
         <div className="border-t border-line p-3">
           <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-            <span
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a]"
-              style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
-              aria-hidden="true"
-            >
-              {initial}
-            </span>
+            {p.user?.avatarUrl ? (
+              <img
+                src={p.user.avatarUrl}
+                alt={p.user.name || "Avatar"}
+                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-accent/30"
+              />
+            ) : (
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a]"
+                style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                aria-hidden="true"
+              >
+                {initial}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{p.user?.name || "Trader"}</p>
               <p className="truncate text-xs text-muted">{p.user?.email}</p>
             </div>
-            <Link
-              href="/app/settings"
-              className={`icon-btn h-8 w-8 border-transparent ${p.active === "settings" ? "text-ink" : ""}`}
-              aria-label="Settings"
-              aria-current={p.active === "settings" ? "page" : undefined}
-              title="Settings"
+            <button
+              type="button"
+              className="icon-btn h-8 w-8 border-transparent text-muted hover:text-ink"
+              onClick={p.onSignOut}
+              aria-label="Sign out"
+              title="Sign out"
             >
-              <IconGear />
-            </Link>
-            <button type="button" className="icon-btn h-8 w-8 border-transparent" onClick={p.onSignOut} aria-label="Sign out" title="Sign out">
               <IconLogout />
             </button>
           </div>

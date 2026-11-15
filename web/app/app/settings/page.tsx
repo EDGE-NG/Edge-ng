@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import ComingNext from "../../_components/coming-next";
+import SettingsView from "./settings-view";
 
 export const metadata: Metadata = { title: "Settings – Edge" };
 
 export default function Page() {
-  return <ComingNext section="settings" />;
+  return <SettingsView />;
 }
