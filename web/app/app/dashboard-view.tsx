@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppFrame from "../_components/app-frame";
-import { IconBook, IconCandles, IconCheck, IconChecklist, IconGauge, IconImages, IconRetry, IconX } from "../_components/icons";
+import { IconBook, IconCandles, IconCheck, IconChecklist, IconImages, IconRetry, IconX } from "../_components/icons";
 import { toast } from "../_components/toaster";
 
 interface Metrics {

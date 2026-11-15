@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
-import { IconCheck, IconGear, IconLock, IconTrash, IconX } from "../../_components/icons";
+import { IconCheck, IconGear, IconTrash, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 
 const TIMEZONES = [
@@ -210,7 +210,7 @@ export default function SettingsView() {
         setDeleteError(msg);
         toast.error(msg);
       }
-    } catch (err) {
+    } catch {
       const msg = "Network error: Unable to reach server. Please check your internet connection.";
       setDeleteError(msg);
       toast.error(msg);

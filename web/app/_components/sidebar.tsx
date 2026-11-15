@@ -102,30 +102,25 @@ interface Props {
 }
 
 export default function Sidebar(p: Props) {
-  const [currentUser, setCurrentUser] = useState(p.user);
-
-  useEffect(() => {
-    setCurrentUser(p.user);
-  }, [p.user]);
+  const [profileOverride, setProfileOverride] = useState<{ displayName?: string; avatarUrl?: string | null } | null>(null);
 
   useEffect(() => {
     function handleProfileUpdate(e: Event) {
       const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
       if (!custom.detail) return;
-      setCurrentUser((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          name: custom.detail.displayName !== undefined ? custom.detail.displayName : prev.name,
-          avatarUrl: custom.detail.avatarUrl !== undefined ? custom.detail.avatarUrl : prev.avatarUrl,
-        };
-      });
+      setProfileOverride(custom.detail);
     }
     window.addEventListener("edge:profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
   }, []);
 
-  const initial = (currentUser?.name || currentUser?.email || "?").trim().charAt(0).toUpperCase();
+  const currentUser = {
+    name: profileOverride?.displayName !== undefined ? profileOverride.displayName : p.user?.name ?? null,
+    email: p.user?.email ?? "",
+    avatarUrl: profileOverride?.avatarUrl !== undefined ? profileOverride.avatarUrl : p.user?.avatarUrl ?? null,
+  };
+
+  const initial = (currentUser.name || currentUser.email || "?").trim().charAt(0).toUpperCase();
 
   return (
     <>
