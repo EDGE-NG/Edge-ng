@@ -141,7 +141,7 @@ export default function Sidebar(p: Props) {
           {PRIMARY_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return (
-              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
+              <Link key={key} href={href} className="side-link" aria-current={current}>
                 <Icon /> {label}
               </Link>
             );
@@ -162,15 +162,12 @@ export default function Sidebar(p: Props) {
                 type="button"
                 className="side-link"
                 aria-current={current}
-                onClick={() => {
-                  p.onClose();
-                  p.onChecklist?.();
-                }}
+                onClick={p.onChecklist}
               >
                 <Icon /> {label}
               </button>
             ) : (
-              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
+              <Link key={key} href={href} className="side-link" aria-current={current}>
                 <Icon /> {label}
               </Link>
             );
@@ -183,7 +180,7 @@ export default function Sidebar(p: Props) {
           {PREFERENCES_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return (
-              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
+              <Link key={key} href={href} className="side-link" aria-current={current}>
                 <Icon /> {label}
               </Link>
             );
