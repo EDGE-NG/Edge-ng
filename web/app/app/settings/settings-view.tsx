@@ -126,7 +126,7 @@ export default function SettingsView() {
       <div className="mx-auto w-full max-w-[800px] px-4 py-8 sm:px-6">
         {/* Navigation Tabs */}
         <div className="mb-8 border-b border-line">
-          <nav className="-mb-px flex space-x-6">
+          <nav className="-mb-px flex space-x-4 sm:space-x-6 overflow-x-auto whitespace-nowrap scrollbar-none">
             {(
               [
                 { id: "profile", label: "Profile & Preferences" },
@@ -415,3 +415,4 @@ export default function SettingsView() {
     </AppFrame>
   );
 }
+

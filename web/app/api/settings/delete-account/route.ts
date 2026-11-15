@@ -41,3 +41,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to delete account. Please try again." }, { status: 500 });
   }
 }
+

@@ -79,3 +79,4 @@ export async function GET() {
     recentDecisions: decisions.slice(0, 5),
   });
 }
+

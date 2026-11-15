@@ -226,7 +226,7 @@ export default function DashboardView() {
                     const isOverridden = d.resolution === "overridden";
 
                     return (
-                      <div key={d.id} className="flex items-center justify-between py-3">
+                      <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                         <div className="flex items-center gap-3">
                           <span
                             className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
@@ -284,3 +284,4 @@ export default function DashboardView() {
     </AppFrame>
   );
 }
+

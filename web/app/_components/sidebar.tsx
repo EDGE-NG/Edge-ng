@@ -31,6 +31,10 @@ const EDGE_NAV: NavItem[] = [
   { key: "evidence", href: "/app/evidence", label: "Evidence library", Icon: IconImages },
 ];
 
+const PREFERENCES_NAV: NavItem[] = [
+  { key: "settings", href: "/app/settings", label: "Settings", Icon: IconGear },
+];
+
 const DESKTOP = "(min-width: 768px)";
 const STORE_KEY = "edge-sidebar";
 
@@ -137,7 +141,7 @@ export default function Sidebar(p: Props) {
           {PRIMARY_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return (
-              <Link key={key} href={href} className="side-link" aria-current={current}>
+              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
                 <Icon /> {label}
               </Link>
             );
@@ -153,11 +157,33 @@ export default function Sidebar(p: Props) {
           {EDGE_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return key === "checklist" && p.onChecklist ? (
-              <button key={key} type="button" className="side-link" aria-current={current} onClick={p.onChecklist}>
+              <button
+                key={key}
+                type="button"
+                className="side-link"
+                aria-current={current}
+                onClick={() => {
+                  p.onClose();
+                  p.onChecklist?.();
+                }}
+              >
                 <Icon /> {label}
               </button>
             ) : (
-              <Link key={key} href={href} className="side-link" aria-current={current}>
+              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
+                <Icon /> {label}
+              </Link>
+            );
+          })}
+
+          <div className="pt-3 pb-1">
+            <div className="border-t border-line/60" />
+          </div>
+
+          {PREFERENCES_NAV.map(({ key, href, label, Icon }) => {
+            const current = p.active === key ? "page" : undefined;
+            return (
+              <Link key={key} href={href} className="side-link" aria-current={current} onClick={p.onClose}>
                 <Icon /> {label}
               </Link>
             );
@@ -177,16 +203,13 @@ export default function Sidebar(p: Props) {
               <p className="truncate text-sm font-medium">{p.user?.name || "Trader"}</p>
               <p className="truncate text-xs text-muted">{p.user?.email}</p>
             </div>
-            <Link
-              href="/app/settings"
-              className={`icon-btn h-8 w-8 border-transparent ${p.active === "settings" ? "text-ink" : ""}`}
-              aria-label="Settings"
-              aria-current={p.active === "settings" ? "page" : undefined}
-              title="Settings"
+            <button
+              type="button"
+              className="icon-btn h-8 w-8 border-transparent text-muted hover:text-ink"
+              onClick={p.onSignOut}
+              aria-label="Sign out"
+              title="Sign out"
             >
-              <IconGear />
-            </Link>
-            <button type="button" className="icon-btn h-8 w-8 border-transparent" onClick={p.onSignOut} aria-label="Sign out" title="Sign out">
               <IconLogout />
             </button>
           </div>
