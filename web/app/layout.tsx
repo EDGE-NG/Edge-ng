@@ -13,8 +13,12 @@ export const metadata: Metadata = {
 const THEME_SCRIPT = `
 try {
   var t = localStorage.getItem("edge-theme");
-  if (t !== "light" && t !== "dark") t = "dark";
-  document.documentElement.setAttribute("data-theme", t);
+  if (t !== "light" && t !== "dark" && t !== "system") t = "dark";
+  var resolved = t;
+  if (t === "system") {
+    resolved = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  document.documentElement.setAttribute("data-theme", resolved);
   var m = localStorage.getItem("edge-motion");
   document.documentElement.setAttribute("data-motion", m === "reduce" ? "reduce" : "full");
 } catch (e) {

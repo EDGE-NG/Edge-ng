@@ -18,6 +18,7 @@ import ChecklistCard from "./checklist-card";
 import Composer, { type ComposerHandle } from "./composer";
 import { IconCheck, IconMic, IconPlus, IconRetry } from "../_components/icons";
 import Sidebar, { MenuButton, useSidebar } from "../_components/sidebar";
+import { ThemeToggle } from "../_components/theme-toggle";
 import { PURPOSE_LABEL, type ChatSummaryWithEdge, type ChatView, type Message, type Rule } from "./types";
 
 const EXAMPLES = [
@@ -290,13 +291,15 @@ export default function ChecklistPage() {
               )}
             </>
           )}
-          {/* Only for traders who already have a checklist; never on a first visit. */}
-          {hasChecklist && mode !== "compose" && mode !== "loading" && (
-            <button type="button" onClick={createNew} className="create-btn ml-auto shrink-0">
-              <IconPlus className="h-3.5 w-3.5" />
-              <span>Create new checklist</span>
-            </button>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            {hasChecklist && mode !== "compose" && mode !== "loading" && (
+              <button type="button" onClick={createNew} className="create-btn shrink-0">
+                <IconPlus className="h-3.5 w-3.5" />
+                <span>Create new checklist</span>
+              </button>
+            )}
+          </div>
         </header>
 
         {mode === "loading" ? (

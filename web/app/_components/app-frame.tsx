@@ -4,6 +4,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar, { MenuButton, useSidebar, type Section } from "./sidebar";
+import { ThemeToggle } from "./theme-toggle";
 
 export default function AppFrame({
   active,
@@ -68,7 +69,10 @@ export default function AppFrame({
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4 sm:px-6">
           <MenuButton open={open} onOpen={() => toggle(true)} />
           <h1 className="truncate text-[1.05rem] font-medium tracking-[-0.02em]">{title}</h1>
-          {actions && <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div>}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            {actions}
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>

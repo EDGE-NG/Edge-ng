@@ -1,9 +1,28 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Toaster as SonnerToaster, toast } from "sonner";
 
 export function Toaster() {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+  useEffect(() => {
+    function updateTheme() {
+      const t = document.documentElement.getAttribute("data-theme");
+      setTheme(t === "light" ? "light" : "dark");
+    }
+    updateTheme();
+
+    const observer = new MutationObserver(() => updateTheme());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    window.addEventListener("edge:theme-changed", updateTheme);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("edge:theme-changed", updateTheme);
+    };
+  }, []);
+
   useEffect(() => {
     function handleOnline() {
       toast.success("Connection restored. You are back online.", {
@@ -35,11 +54,16 @@ export function Toaster() {
   return (
     <SonnerToaster
       position="top-right"
-      theme="dark"
+      theme={theme}
       richColors
       closeButton
       toastOptions={{
-        className: "!bg-[#0c1511] !border-[#1e2f25] !text-[#e6f5eb] font-sans shadow-xl",
+        style: {
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-line)",
+          color: "var(--color-ink)",
+          fontFamily: "var(--font-sans)",
+        },
       }}
     />
   );

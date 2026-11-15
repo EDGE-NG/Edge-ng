@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
-import { IconCheck, IconGear, IconTrash, IconX } from "../../_components/icons";
+import { IconCheck, IconGear, IconMoon, IconSun, IconTrash, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
+import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
 
 const TIMEZONES = [
   "UTC",
@@ -38,6 +39,7 @@ export default function SettingsView() {
   const [timezone, setTimezone] = useState("UTC");
   const [preferredMarkets, setPreferredMarkets] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,6 +63,12 @@ export default function SettingsView() {
             setTimezone(data.user.timezone || "UTC");
             setPreferredMarkets(data.user.preferredMarkets || []);
             setAvatarUrl(data.user.avatarUrl || null);
+            if (data.user.theme) {
+              setTheme(data.user.theme as Theme);
+              applyTheme(data.user.theme as Theme);
+            } else {
+              setTheme(getStoredTheme());
+            }
           }
         } else {
           toast.error("Failed to load profile settings.");
@@ -127,6 +135,11 @@ export default function SettingsView() {
     reader.readAsDataURL(file);
   }
 
+  function handleSelectTheme(t: Theme) {
+    setTheme(t);
+    applyTheme(t);
+  }
+
   async function handleSaveProfile(e?: React.FormEvent) {
     if (e) e.preventDefault();
     setSaving(true);
@@ -134,7 +147,7 @@ export default function SettingsView() {
       const res = await fetch("/api/settings/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl }),
+        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl, theme }),
       });
       if (res.ok) {
         toast.success("Profile preferences saved successfully.");
@@ -412,6 +425,68 @@ export default function SettingsView() {
                           />
                           <span>{m.label}</span>
                         </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Interface Theme */}
+                <div>
+                  <label className="block text-xs font-medium text-ink">Interface Theme</label>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    Choose how Edge looks across charts and workspaces. You can also quickly toggle anytime using the sun/moon button in the top header.
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {[
+                      {
+                        id: "dark" as const,
+                        title: "Dark mode",
+                        desc: "Deep blacks and forest green for focused trading",
+                        icon: <IconMoon className="h-4 w-4 text-accent" />,
+                      },
+                      {
+                        id: "light" as const,
+                        title: "Light mode",
+                        desc: "Clean high-contrast theme for daytime sessions",
+                        icon: <IconSun className="h-4 w-4 text-amber-500" />,
+                      },
+                      {
+                        id: "system" as const,
+                        title: "System default",
+                        desc: "Automatically adapts to device appearance",
+                        icon: (
+                          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                            <rect x="2" y="3" width="20" height="14" rx="2" />
+                            <path d="M8 21h8M12 17v4" />
+                          </svg>
+                        ),
+                      },
+                    ].map((opt) => {
+                      const selected = theme === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSelectTheme(opt.id)}
+                          className={`flex flex-col items-start gap-2 rounded-xl border p-3.5 text-left transition ${
+                            selected
+                              ? "border-accent bg-accent/10 ring-1 ring-accent"
+                              : "border-line bg-surface/50 hover:border-line hover:bg-surface"
+                          }`}
+                        >
+                          <div className="flex w-full items-center justify-between">
+                            <span className="flex items-center gap-2 text-xs font-semibold text-ink">
+                              {opt.icon}
+                              {opt.title}
+                            </span>
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                selected ? "bg-accent ring-2 ring-accent/30" : "bg-line"
+                              }`}
+                            />
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-muted">{opt.desc}</p>
+                        </button>
                       );
                     })}
                   </div>
