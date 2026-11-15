@@ -196,10 +196,29 @@ export default function SettingsView() {
         {/* Tab 1: Profile & Preferences */}
         {tab === "profile" && (
           <section className="card p-6 sm:p-8">
-            <h3 className="text-lg font-medium text-ink">Trader Profile & Preferences</h3>
-            <p className="mt-1 text-xs text-muted">
-              Configure your timezone and display preferences (PRD 4.8).
-            </p>
+            <div className="flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-medium text-ink">Trader Profile & Preferences</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Configure your timezone and display preferences (PRD 4.8).
+                </p>
+              </div>
+              <div className="flex items-center gap-3 self-end sm:self-auto">
+                {saveSuccess && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-pass">
+                    <IconCheck className="h-3.5 w-3.5" /> Saved
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="btn btn-main btn-sm text-xs px-4"
+                >
+                  {saving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            </div>
 
             {loading ? (
               <div className="py-8 text-xs text-muted">Loading preferences...</div>
@@ -208,45 +227,99 @@ export default function SettingsView() {
                 {/* Profile Photo */}
                 <div>
                   <label className="block text-xs font-medium text-ink">Profile Photo</label>
-                  <div className="mt-2.5 flex items-center gap-4">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Profile photo"
-                        className="h-16 w-16 rounded-full object-cover ring-2 ring-accent/40"
-                      />
-                    ) : (
-                      <span
-                        className="grid h-16 w-16 place-items-center rounded-full text-xl font-semibold text-[#04110a]"
-                        style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
-                      >
-                        {(displayName || email || "T").trim().charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <label className="btn btn-main btn-sm cursor-pointer text-xs">
-                        {uploadingAvatar ? "Processing…" : "Upload photo"}
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          onChange={handleAvatarFile}
-                          className="hidden"
+                  <div className="mt-3 flex items-center gap-4">
+                    {/* Interactive Avatar Circle with Upload Badge */}
+                    <label
+                      className="group relative flex h-20 w-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full ring-2 ring-line transition hover:ring-accent/70"
+                      title="Click to upload profile photo"
+                    >
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Profile photo"
+                          className="h-full w-full object-cover transition group-hover:opacity-75"
                         />
-                      </label>
+                      ) : (
+                        <span
+                          className="grid h-full w-full place-items-center text-2xl font-semibold text-[#04110a]"
+                          style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                        >
+                          {(displayName || email || "T").trim().charAt(0).toUpperCase()}
+                        </span>
+                      )}
+
+                      {/* Hover Scrim with Camera/Upload Icon */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 transition group-hover:opacity-100">
+                        <svg
+                          className="h-5 w-5 text-accent"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                          />
+                        </svg>
+                        <span className="mt-0.5 text-[10px] font-medium text-white">Upload</span>
+                      </div>
+
+                      {/* Corner Camera Badge */}
+                      <span className="absolute bottom-0.5 right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-[#04110a] shadow-md ring-2 ring-surface">
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.4}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                          />
+                        </svg>
+                      </span>
+
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        onChange={handleAvatarFile}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* Explanatory text & actions */}
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span className="font-medium text-ink">
+                        {uploadingAvatar ? "Processing photo…" : "Upload profile photo"}
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        Click the avatar to select an image (JPG, PNG, or WebP).
+                      </span>
                       {avatarUrl && (
                         <button
                           type="button"
                           onClick={() => setAvatarUrl(null)}
-                          className="rounded-lg border border-fail/40 px-3 py-1.5 text-xs text-fail transition hover:bg-fail/10"
+                          className="mt-0.5 w-fit text-[11px] font-medium text-fail hover:underline"
                         >
                           Remove photo
                         </button>
                       )}
                     </div>
                   </div>
-                  <span className="mt-1.5 block text-[11px] text-muted">
-                    JPG, PNG or WebP. Automatically centered and optimized.
-                  </span>
                 </div>
 
                 <div>
@@ -316,8 +389,8 @@ export default function SettingsView() {
                   <span className="text-xs text-pass">
                     {saveSuccess && "✓ Preferences saved successfully"}
                   </span>
-                  <button type="submit" disabled={saving} className="btn btn-main btn-sm text-xs">
-                    {saving ? "Saving..." : "Save Preferences"}
+                  <button type="submit" disabled={saving} className="btn btn-main btn-sm text-xs px-4">
+                    {saving ? "Saving..." : "Save changes"}
                   </button>
                 </div>
               </form>
