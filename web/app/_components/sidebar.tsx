@@ -11,14 +11,24 @@ import { useCallback, useEffect, useState } from "react";
 import EdgeMark from "./edge-mark";
 import { IconBook, IconCandles, IconChecklist, IconGauge, IconGear, IconImages, IconLogout, IconMenu, IconX } from "./icons";
 
-export type Section = "checklist" | "evidence" | "workspace" | "journal" | "dashboard" | "settings";
+export type Section = "dashboard" | "workspace" | "journal" | "checklist" | "evidence" | "settings";
 
-const NAV: Array<{ key: Section; href: string; label: string; Icon: (p: { className?: string }) => React.ReactElement }> = [
-  { key: "checklist", href: "/checklist", label: "Checklist", Icon: IconChecklist },
-  { key: "evidence", href: "/app/evidence", label: "Evidence library", Icon: IconImages },
+interface NavItem {
+  key: Section;
+  href: string;
+  label: string;
+  Icon: (p: { className?: string }) => React.ReactElement;
+}
+
+const PRIMARY_NAV: NavItem[] = [
+  { key: "dashboard", href: "/app", label: "Dashboard", Icon: IconGauge },
   { key: "workspace", href: "/app/workspace", label: "Trade workspace", Icon: IconCandles },
   { key: "journal", href: "/app/journal", label: "Journal", Icon: IconBook },
-  { key: "dashboard", href: "/app", label: "Dashboard", Icon: IconGauge },
+];
+
+const EDGE_NAV: NavItem[] = [
+  { key: "checklist", href: "/checklist", label: "Checklist", Icon: IconChecklist },
+  { key: "evidence", href: "/app/evidence", label: "Evidence library", Icon: IconImages },
 ];
 
 const DESKTOP = "(min-width: 768px)";
@@ -114,7 +124,7 @@ export default function Sidebar(p: Props) {
         inert={p.open === false || undefined}
       >
         <div className="flex h-16 items-center justify-between px-4">
-          <Link href="/" className="inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em]">
+          <Link href="/app" className="inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em]">
             <EdgeMark className="h-8 w-10" />
             Edge
           </Link>
@@ -124,7 +134,23 @@ export default function Sidebar(p: Props) {
         </div>
 
         <nav className="mt-2 flex-1 space-y-0.5 px-3" aria-label="Sections">
-          {NAV.map(({ key, href, label, Icon }) => {
+          {PRIMARY_NAV.map(({ key, href, label, Icon }) => {
+            const current = p.active === key ? "page" : undefined;
+            return (
+              <Link key={key} href={href} className="side-link" aria-current={current}>
+                <Icon /> {label}
+              </Link>
+            );
+          })}
+
+          <div className="pt-3 pb-1">
+            <div className="border-t border-line/60" />
+            <span className="mt-2.5 block px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
+              Your Edge
+            </span>
+          </div>
+
+          {EDGE_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return key === "checklist" && p.onChecklist ? (
               <button key={key} type="button" className="side-link" aria-current={current} onClick={p.onChecklist}>
