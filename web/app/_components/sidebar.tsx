@@ -93,7 +93,7 @@ export function MenuButton({ open, onOpen }: { open: boolean | null; onOpen: () 
 
 interface Props {
   active: Section;
-  user: { name: string | null; email: string } | null;
+  user: { name: string | null; email: string; avatarUrl?: string | null } | null;
   open: boolean | null;
   onClose: () => void;
   /** On the Checklist page, "Checklist" resets the page instead of navigating. */
@@ -192,13 +192,21 @@ export default function Sidebar(p: Props) {
 
         <div className="border-t border-line p-3">
           <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-            <span
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a]"
-              style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
-              aria-hidden="true"
-            >
-              {initial}
-            </span>
+            {p.user?.avatarUrl ? (
+              <img
+                src={p.user.avatarUrl}
+                alt={p.user.name || "Avatar"}
+                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-accent/30"
+              />
+            ) : (
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a]"
+                style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                aria-hidden="true"
+              >
+                {initial}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{p.user?.name || "Trader"}</p>
               <p className="truncate text-xs text-muted">{p.user?.email}</p>

@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppFrame from "../../_components/app-frame";
+import Dropdown from "../../_components/dropdown";
 import { IconCheck, IconImages, IconMic, IconPlus, IconRetry, IconTrash, IconX } from "../../_components/icons";
 import { useVoiceNote } from "../../_components/use-voice-note";
 
@@ -150,18 +151,16 @@ export default function EvidenceLibrary() {
       title="Evidence library"
       actions={
         lists && lists.length > 1 ? (
-          <select
-            className="input h-10 w-auto max-w-[240px] py-0 text-sm"
+          <Dropdown
             value={edgeId ?? ""}
-            onChange={(e) => setEdgeId(e.target.value)}
-            aria-label="Checklist"
-          >
-            {lists.map((c) => (
-              <option key={c.edgeId} value={c.edgeId}>
-                {c.name} · v{c.versionNumber}
-              </option>
-            ))}
-          </select>
+            onChange={setEdgeId}
+            options={lists.map((c) => ({
+              value: c.edgeId,
+              label: `${c.name} · v${c.versionNumber}`,
+            }))}
+            className="w-[220px]"
+            ariaLabel="Checklist"
+          />
         ) : undefined
       }
     >

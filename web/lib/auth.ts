@@ -4,7 +4,7 @@
  * in httpOnly cookies set by @supabase/ssr. Profile details (name, timezone)
  * live in public.profiles.
  */
-import { db } from "./db";
+import { db, json } from "./db";
 import { authClient } from "./supabase";
 
 export const PASSWORD_MIN = 8;
@@ -33,6 +33,7 @@ export interface User {
   name: string | null;
   timezone: string;
   created_at: string;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -52,16 +53,18 @@ export async function getUser(): Promise<User | null> {
     return null;
   }
   if (!authUser) return null;
-  const p = await db.one<{ display_name: string | null; timezone: string; created_at: string }>(
-    "SELECT display_name, timezone, created_at FROM profiles WHERE user_id = ?",
+  const p = await db.one<{ display_name: string | null; timezone: string; created_at: string; settings: unknown }>(
+    "SELECT display_name, timezone, created_at, settings FROM profiles WHERE user_id = ?",
     authUser.id
   );
-  const meta = (authUser.user_metadata ?? {}) as { name?: string };
+  const settings = json(p?.settings, {}) as { avatarUrl?: string };
+  const meta = (authUser.user_metadata ?? {}) as { name?: string; avatarUrl?: string };
   return {
     id: authUser.id,
     email: authUser.email ?? "",
     name: p?.display_name ?? meta.name ?? null,
     timezone: p?.timezone ?? "UTC",
     created_at: p?.created_at ?? authUser.created_at,
+    avatarUrl: settings.avatarUrl ?? meta.avatarUrl ?? null,
   };
 }

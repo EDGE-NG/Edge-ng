@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
+import Dropdown from "../../_components/dropdown";
 import { IconCheck, IconGear, IconLock, IconTrash, IconX } from "../../_components/icons";
 
 const TIMEZONES = [
@@ -35,6 +36,8 @@ export default function SettingsView() {
   const [displayName, setDisplayName] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [preferredMarkets, setPreferredMarkets] = useState<string[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -57,6 +60,7 @@ export default function SettingsView() {
             setDisplayName(data.user.displayName || "");
             setTimezone(data.user.timezone || "UTC");
             setPreferredMarkets(data.user.preferredMarkets || []);
+            setAvatarUrl(data.user.avatarUrl || null);
           }
         }
       } catch (err) {
@@ -70,6 +74,44 @@ export default function SettingsView() {
     };
   }, []);
 
+  function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+
+    setUploadingAvatar(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 256;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        setAvatarUrl(dataUrl);
+        setUploadingAvatar(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -78,7 +120,7 @@ export default function SettingsView() {
       const res = await fetch("/api/settings/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, timezone, preferredMarkets }),
+        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl }),
       });
       if (res.ok) {
         setSaveSuccess(true);
@@ -162,7 +204,51 @@ export default function SettingsView() {
             {loading ? (
               <div className="py-8 text-xs text-muted">Loading preferences...</div>
             ) : (
-              <form onSubmit={handleSaveProfile} className="mt-6 space-y-5">
+              <form onSubmit={handleSaveProfile} className="mt-6 space-y-6">
+                {/* Profile Photo */}
+                <div>
+                  <label className="block text-xs font-medium text-ink">Profile Photo</label>
+                  <div className="mt-2.5 flex items-center gap-4">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Profile photo"
+                        className="h-16 w-16 rounded-full object-cover ring-2 ring-accent/40"
+                      />
+                    ) : (
+                      <span
+                        className="grid h-16 w-16 place-items-center rounded-full text-xl font-semibold text-[#04110a]"
+                        style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                      >
+                        {(displayName || email || "T").trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <label className="btn btn-main btn-sm cursor-pointer text-xs">
+                        {uploadingAvatar ? "Processing…" : "Upload photo"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          onChange={handleAvatarFile}
+                          className="hidden"
+                        />
+                      </label>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl(null)}
+                          className="rounded-lg border border-fail/40 px-3 py-1.5 text-xs text-fail transition hover:bg-fail/10"
+                        >
+                          Remove photo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <span className="mt-1.5 block text-[11px] text-muted">
+                    JPG, PNG or WebP. Automatically centered and optimized.
+                  </span>
+                </div>
+
                 <div>
                   <label className="block text-xs font-medium text-muted">Email Address</label>
                   <input
@@ -189,18 +275,16 @@ export default function SettingsView() {
 
                 <div>
                   <label className="block text-xs font-medium text-ink">Timezone</label>
-                  <select
-                    value={timezone}
-                    onChange={(e) => setTimezone(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink focus:border-accent focus:outline-none"
-                  >
-                    {TIMEZONES.map((tz) => (
-                      <option key={tz} value={tz}>
-                        {tz}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="mt-1 block text-[11px] text-muted">
+                  <div className="mt-1">
+                    <Dropdown
+                      value={timezone}
+                      onChange={setTimezone}
+                      options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
+                      className="w-full"
+                      ariaLabel="Timezone"
+                    />
+                  </div>
+                  <span className="mt-1.5 block text-[11px] text-muted">
                     Timestamps in the journal and workspace will format according to this timezone.
                   </span>
                 </div>

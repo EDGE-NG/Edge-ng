@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, json } from "@/lib/db";
 
 export async function GET() {
   const user = await getUser();
@@ -13,10 +13,13 @@ export async function GET() {
     theme: string;
     locale: string;
     created_at: string;
+    settings: unknown;
   }>(
-    "SELECT display_name, timezone, preferred_markets, theme, locale, created_at FROM profiles WHERE user_id = ?",
+    "SELECT display_name, timezone, preferred_markets, theme, locale, created_at, settings FROM profiles WHERE user_id = ?",
     user.id
   );
+
+  const settings = json(profile?.settings, {}) as { avatarUrl?: string };
 
   return NextResponse.json({
     user: {
@@ -27,6 +30,7 @@ export async function GET() {
       preferredMarkets: profile?.preferred_markets ?? [],
       theme: profile?.theme ?? "dark",
       createdAt: profile?.created_at ?? user.created_at,
+      avatarUrl: settings.avatarUrl ?? null,
     },
   });
 }
@@ -39,21 +43,31 @@ export async function PATCH(req: Request) {
     displayName?: string;
     timezone?: string;
     preferredMarkets?: string[];
+    avatarUrl?: string | null;
   };
+
+  const curr = await db.one<{ settings: unknown }>("SELECT settings FROM profiles WHERE user_id = ?", user.id);
+  const currSettings = json(curr?.settings, {}) as Record<string, unknown>;
+  if (body.avatarUrl !== undefined) {
+    currSettings.avatarUrl = body.avatarUrl;
+  }
 
   await db.run(
     `UPDATE profiles
      SET display_name = COALESCE(?, display_name),
          timezone = COALESCE(?, timezone),
          preferred_markets = COALESCE(?, preferred_markets),
+         settings = ?,
          updated_at = now()
      WHERE user_id = ?`,
     typeof body.displayName === "string" ? body.displayName.trim().slice(0, 80) : null,
     typeof body.timezone === "string" ? body.timezone : null,
     Array.isArray(body.preferredMarkets) ? body.preferredMarkets : null,
+    currSettings,
     user.id
   );
 
   return NextResponse.json({ ok: true });
 }
+
 
