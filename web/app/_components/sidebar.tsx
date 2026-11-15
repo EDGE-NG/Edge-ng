@@ -102,7 +102,30 @@ interface Props {
 }
 
 export default function Sidebar(p: Props) {
-  const initial = (p.user?.name || p.user?.email || "?").trim().charAt(0).toUpperCase();
+  const [currentUser, setCurrentUser] = useState(p.user);
+
+  useEffect(() => {
+    setCurrentUser(p.user);
+  }, [p.user]);
+
+  useEffect(() => {
+    function handleProfileUpdate(e: Event) {
+      const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
+      if (!custom.detail) return;
+      setCurrentUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          name: custom.detail.displayName !== undefined ? custom.detail.displayName : prev.name,
+          avatarUrl: custom.detail.avatarUrl !== undefined ? custom.detail.avatarUrl : prev.avatarUrl,
+        };
+      });
+    }
+    window.addEventListener("edge:profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
+  }, []);
+
+  const initial = (currentUser?.name || currentUser?.email || "?").trim().charAt(0).toUpperCase();
 
   return (
     <>
@@ -188,29 +211,37 @@ export default function Sidebar(p: Props) {
         </nav>
 
         <div className="border-t border-line p-3">
-          <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-            {p.user?.avatarUrl ? (
-              <img
-                src={p.user.avatarUrl}
-                alt={p.user.name || "Avatar"}
-                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-accent/30"
-              />
-            ) : (
-              <span
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a]"
-                style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
-                aria-hidden="true"
-              >
-                {initial}
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{p.user?.name || "Trader"}</p>
-              <p className="truncate text-xs text-muted">{p.user?.email}</p>
-            </div>
+          <div className="flex items-center justify-between gap-1 rounded-xl p-1 transition hover:bg-white/[0.04]">
+            <Link
+              href="/app/settings"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1 transition group"
+              title="Trader profile & settings"
+            >
+              {currentUser?.avatarUrl ? (
+                <img
+                  src={currentUser.avatarUrl}
+                  alt={currentUser.name || "Avatar"}
+                  className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-accent/30 group-hover:ring-accent/70 transition"
+                />
+              ) : (
+                <span
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[#04110a] group-hover:brightness-110 transition"
+                  style={{ background: "linear-gradient(135deg,#e6ff5a,#5ef088)" }}
+                  aria-hidden="true"
+                >
+                  {initial}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-ink group-hover:text-accent transition-colors">
+                  {currentUser?.name || "Trader"}
+                </p>
+                <p className="truncate text-xs text-muted">{currentUser?.email}</p>
+              </div>
+            </Link>
             <button
               type="button"
-              className="icon-btn h-8 w-8 border-transparent text-muted hover:text-ink"
+              className="icon-btn h-8 w-8 shrink-0 border-transparent text-muted hover:text-ink"
               onClick={p.onSignOut}
               aria-label="Sign out"
               title="Sign out"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppFrame from "../../_components/app-frame";
 import { IconBook, IconCheck, IconRetry, IconX } from "../../_components/icons";
+import { toast } from "../../_components/toaster";
 
 interface OverrideInfo {
   id: string;
@@ -95,6 +96,7 @@ export default function JournalView() {
         }
       } catch (err) {
         console.error("Failed to load journal entries", err);
+        toast.error("Network error: Failed to load journal entries. Please check your connection.");
       } finally {
         if (alive) setLoading(false);
       }
@@ -115,12 +117,18 @@ export default function JournalView() {
         body: JSON.stringify({ userNotes: curr.notes, lessons: curr.lessons }),
       });
       if (res.ok) {
+        toast.success("Journal notes saved successfully.");
         setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false, saved: true } }));
         setTimeout(() => {
           setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saved: false } }));
         }, 2500);
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || "Failed to save journal notes.");
+        setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false } }));
       }
     } catch {
+      toast.error("Network error: Could not save journal notes. Please check your connection.");
       setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false } }));
     }
   }

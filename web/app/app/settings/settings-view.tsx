@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
 import { IconCheck, IconGear, IconLock, IconTrash, IconX } from "../../_components/icons";
+import { toast } from "../../_components/toaster";
 
 const TIMEZONES = [
   "UTC",
@@ -40,7 +41,6 @@ export default function SettingsView() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Delete Account State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -62,9 +62,12 @@ export default function SettingsView() {
             setPreferredMarkets(data.user.preferredMarkets || []);
             setAvatarUrl(data.user.avatarUrl || null);
           }
+        } else {
+          toast.error("Failed to load profile settings.");
         }
       } catch (err) {
         console.error("Failed to load settings profile", err);
+        toast.error("Network error: Unable to load profile. Please check your connection.");
       } finally {
         if (alive) setLoading(false);
       }
@@ -77,12 +80,23 @@ export default function SettingsView() {
   function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image (PNG, JPEG, or WebP).");
+      return;
+    }
 
     setUploadingAvatar(true);
     const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error("Failed to read the selected image file.");
+      setUploadingAvatar(false);
+    };
     reader.onload = (event) => {
       const img = new Image();
+      img.onerror = () => {
+        toast.error("Failed to process image.");
+        setUploadingAvatar(false);
+      };
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const maxDim = 256;
@@ -106,16 +120,16 @@ export default function SettingsView() {
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         setAvatarUrl(dataUrl);
         setUploadingAvatar(false);
+        toast.info("Profile photo updated. Click 'Save changes' to apply.", { duration: 3000 });
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   }
 
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSaveProfile(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     setSaving(true);
-    setSaveSuccess(false);
     try {
       const res = await fetch("/api/settings/profile", {
         method: "PATCH",
@@ -123,11 +137,20 @@ export default function SettingsView() {
         body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl }),
       });
       if (res.ok) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        toast.success("Profile preferences saved successfully.");
+        // Notify sidebar & application frame to update avatar & display name immediately
+        window.dispatchEvent(
+          new CustomEvent("edge:profile-updated", {
+            detail: { displayName, avatarUrl },
+          })
+        );
+      } else {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || "Failed to update profile settings.");
       }
     } catch (err) {
       console.error("Failed to update profile", err);
+      toast.error("Network error: Unable to reach the server. Please check your internet connection.");
     } finally {
       setSaving(false);
     }
@@ -137,6 +160,34 @@ export default function SettingsView() {
     setPreferredMarkets((prev) =>
       prev.includes(marketId) ? prev.filter((m) => m !== marketId) : [...prev, marketId]
     );
+  }
+
+  const [exporting, setExporting] = useState(false);
+
+  async function handleDownloadExport() {
+    setExporting(true);
+    toast.info("Preparing data export...", { duration: 2000 });
+    try {
+      const res = await fetch("/api/settings/export");
+      if (!res.ok) {
+        throw new Error("Export failed with status " + res.status);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `edge-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Data export downloaded successfully.");
+    } catch (err) {
+      console.error("Export failed", err);
+      toast.error("Network error: Could not download export. Please check your internet connection.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleDeleteAccount() {
@@ -150,14 +201,19 @@ export default function SettingsView() {
         body: JSON.stringify({ confirmation: deleteConfirmation }),
       });
       if (res.ok) {
+        toast.success("Account deleted successfully.");
         router.push("/");
         router.refresh();
       } else {
-        const d = await res.json();
-        setDeleteError(d.error || "Failed to delete account");
+        const d = await res.json().catch(() => ({}));
+        const msg = d.error || "Failed to delete account";
+        setDeleteError(msg);
+        toast.error(msg);
       }
     } catch (err) {
-      setDeleteError("Network error deleting account");
+      const msg = "Network error: Unable to reach server. Please check your internet connection.";
+      setDeleteError(msg);
+      toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -204,14 +260,9 @@ export default function SettingsView() {
                 </p>
               </div>
               <div className="flex items-center gap-3 self-end sm:self-auto">
-                {saveSuccess && (
-                  <span className="flex items-center gap-1 text-xs font-medium text-pass">
-                    <IconCheck className="h-3.5 w-3.5" /> Saved
-                  </span>
-                )}
                 <button
                   type="button"
-                  onClick={handleSaveProfile}
+                  onClick={() => handleSaveProfile()}
                   disabled={saving}
                   className="btn btn-main btn-sm text-xs px-4"
                 >
@@ -290,7 +341,10 @@ export default function SettingsView() {
                       {avatarUrl && (
                         <button
                           type="button"
-                          onClick={() => setAvatarUrl(null)}
+                          onClick={() => {
+                            setAvatarUrl(null);
+                            toast.info("Profile photo cleared. Click 'Save changes' to apply.", { duration: 3000 });
+                          }}
                           className="mt-0.5 w-fit text-[11px] font-medium text-fail hover:underline"
                         >
                           Remove photo
@@ -363,10 +417,7 @@ export default function SettingsView() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-line pt-4">
-                  <span className="text-xs text-pass">
-                    {saveSuccess && "✓ Preferences saved successfully"}
-                  </span>
+                <div className="flex items-center justify-end border-t border-line pt-4">
                   <button type="submit" disabled={saving} className="btn btn-main btn-sm text-xs px-4">
                     {saving ? "Saving..." : "Save changes"}
                   </button>
@@ -452,14 +503,15 @@ export default function SettingsView() {
               </div>
 
               <div className="pt-2">
-                <a
-                  href="/api/settings/export"
-                  download
+                <button
+                  type="button"
+                  onClick={handleDownloadExport}
+                  disabled={exporting}
                   className="btn btn-main btn-sm inline-flex items-center gap-2 text-xs"
                 >
                   <IconGear className="h-3.5 w-3.5" />
-                  Download Full JSON Export
-                </a>
+                  {exporting ? "Preparing export..." : "Download Full JSON Export"}
+                </button>
               </div>
             </div>
           </section>

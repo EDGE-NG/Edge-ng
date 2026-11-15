@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
+import { Toaster } from "./_components/toaster";
 
 export const metadata: Metadata = {
   title: "Edge – Follow the trading rules you set",
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen">
+        <Toaster />
         {children}
         <Script
           id="edge-theme-init"
