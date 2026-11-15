@@ -37,8 +37,8 @@ export async function GET() {
   );
 
   const evidence = await db.all(
-    `SELECT id, item_id, storage_path, polarity, explanation, timeframe, market_state, is_primary, created_at
-     FROM evidence_images WHERE user_id = ?`,
+    `SELECT id, checklist_id, item_key, slot, polarity, status, object_key, mime_type, bytes, width, height, trader_note, interpretation_text, interpretation_json, created_at, archived_at
+     FROM evidence_images WHERE user_id = ? ORDER BY created_at DESC`,
     user.id
   );
 
@@ -79,7 +79,10 @@ export async function GET() {
           items: items.filter((i) => i.version_id === v.id),
         })),
     })),
-    evidenceLibrary: evidence,
+    evidenceLibrary: evidence.map((e) => ({
+      ...e,
+      interpretation_json: json((e as Record<string, unknown>).interpretation_json, null),
+    })),
     tradeIntents: intents,
     gateDecisions: decisions.map((d) => ({
       ...d,

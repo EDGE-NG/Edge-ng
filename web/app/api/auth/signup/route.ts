@@ -76,8 +76,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (error.code === "over_email_send_rate_limit") {
+      console.error(
+        "[signup] Supabase email rate limit reached. For local development, disable 'Confirm email' in Supabase Auth settings or use admin API."
+      );
       return NextResponse.json(
-        { error: "Supabase email rate limit reached. Please disable 'Confirm email' in your Supabase Auth settings for development." },
+        { error: "Too many sign-ups right now, please try again in a few minutes." },
         { status: 429 }
       );
     }
