@@ -24,7 +24,7 @@ Next.js 16 (App Router) + Tailwind CSS. Built by Daniel and Mayokun. See the roo
 - **Accounts:** Supabase Auth (passwords, sessions, email confirmation, password reset).
 - **Data:** Supabase Postgres, tables from `supabase/migrations/` (checklists, versions, rules, evidence, workspace sessions, rule checks, gate decisions, overrides, AI runs).
 - **Files:** Supabase Storage, private buckets `evidence` (example charts) and `frames` (chart captures), one folder per user.
-- **AI:** Groq first, OpenRouter as fallback (`lib/ai.ts`). Keys stay on the server.
+- **AI:** Groq for text; Google Gemini (free key from aistudio.google.com/apikey) for reading chart images and as a text fallback; OpenRouter last, optional (`lib/ai.ts`). Keys stay on the server.
 - **Market data:** Binance for crypto (no key), Twelve Data for forex and indices (`lib/market.ts`).
 
 The server connects to Postgres directly, which bypasses row-level security, so every query filters by the signed-in user's id.
@@ -40,6 +40,7 @@ DATABASE_URL=
 
 # AI and market data
 GROQ_API_KEY=
+GEMINI_API_KEY=
 OPENROUTER_API_KEY=
 TWELVE_DATA_API_KEY=
 
@@ -47,6 +48,8 @@ TWELVE_DATA_API_KEY=
 GROQ_MODEL=
 GROQ_STT_MODEL=
 GROQ_VISION_MODEL=
+GEMINI_MODEL=
+GEMINI_VISION_MODEL=
 OPENROUTER_MODEL=
 OPENROUTER_VISION_MODEL=
 DATABASE_POOL_MAX=
