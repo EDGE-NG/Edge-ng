@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppFrame from "../_components/app-frame";
 import { IconBook, IconCandles, IconCheck, IconChecklist, IconImages, IconRetry, IconX } from "../_components/icons";
 import { toast } from "../_components/toaster";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 interface Metrics {
   totalChecks: number;
@@ -36,6 +37,10 @@ export default function DashboardView() {
     (async () => {
       try {
         const res = await fetch("/api/dashboard");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (alive) {

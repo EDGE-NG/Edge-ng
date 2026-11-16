@@ -54,7 +54,24 @@ export default function ChecklistPage() {
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const [user, setUser] = useState<{ name: string | null; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string | null; email: string; avatarUrl?: string | null } | null>(null);
+
+  useEffect(() => {
+    function handleProfileUpdate(e: Event) {
+      const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
+      if (!custom.detail) return;
+      setUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          name: custom.detail.displayName !== undefined ? custom.detail.displayName : prev.name,
+          avatarUrl: custom.detail.avatarUrl !== undefined ? custom.detail.avatarUrl : prev.avatarUrl,
+        };
+      });
+    }
+    window.addEventListener("edge:profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
+  }, []);
   const [chats, setChats] = useState<ChatSummaryWithEdge[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);

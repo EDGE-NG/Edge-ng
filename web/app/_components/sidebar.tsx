@@ -48,6 +48,7 @@ const PREFERENCES_NAV: NavItem[] = [
 ];
 
 const COLLAPSED_KEY = "edge-sidebar-collapsed";
+const AVATAR_KEY = "edge-user-avatar";
 
 function subscribeCollapsed(cb: () => void) {
   window.addEventListener("storage", cb);
@@ -125,10 +126,36 @@ export default function Sidebar(p: Props) {
       const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
       if (!custom.detail) return;
       setProfileOverride(custom.detail);
+      if (custom.detail.avatarUrl) {
+        try {
+          localStorage.setItem(AVATAR_KEY, custom.detail.avatarUrl);
+        } catch {
+          /* storage blocked */
+        }
+      }
     }
     window.addEventListener("edge:profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
   }, []);
+
+  useEffect(() => {
+    if (p.user?.avatarUrl) {
+      try {
+        localStorage.setItem(AVATAR_KEY, p.user.avatarUrl);
+      } catch {
+        /* storage blocked */
+      }
+    }
+  }, [p.user?.avatarUrl]);
+
+  let cachedAvatar: string | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      cachedAvatar = localStorage.getItem(AVATAR_KEY);
+    } catch {
+      /* storage blocked */
+    }
+  }
 
   const toggleCollapsed = useCallback(() => {
     try {
@@ -143,7 +170,10 @@ export default function Sidebar(p: Props) {
   const currentUser = {
     name: profileOverride?.displayName !== undefined ? profileOverride.displayName : p.user?.name ?? null,
     email: p.user?.email ?? "",
-    avatarUrl: profileOverride?.avatarUrl !== undefined ? profileOverride.avatarUrl : p.user?.avatarUrl ?? null,
+    avatarUrl:
+      profileOverride?.avatarUrl !== undefined
+        ? profileOverride.avatarUrl
+        : (p.user?.avatarUrl ?? cachedAvatar),
   };
 
   const initial = (currentUser.name || currentUser.email || "?").trim().charAt(0).toUpperCase();
@@ -169,10 +199,11 @@ export default function Sidebar(p: Props) {
       >
         {/* Header */}
         <div
-          className={`flex h-16 items-center transition-all ${
-            collapsed ? "justify-between px-4 md:justify-center md:px-0" : "justify-between px-4"
+          className={`flex h-16 items-center px-4 transition-all ${
+            collapsed ? "justify-between md:justify-center md:px-0" : "justify-between"
           }`}
         >
+          {/* Expanded brand on the left */}
           <Link
             href="/app"
             className={`inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em] ${
@@ -180,44 +211,50 @@ export default function Sidebar(p: Props) {
             }`}
           >
             <EdgeMark className="h-8 w-10 shrink-0" />
-            Edge
+            <span>Edge</span>
           </Link>
 
-          {/* Desktop icon-only mark */}
-          {collapsed && (
-            <Link
-              href="/app"
-              className="hidden md:inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/[0.04] transition"
-              title="Edge (Dashboard)"
-              aria-label="Edge Dashboard"
+          {/* Desktop collapse button when expanded: cleanly pinned to top-right */}
+          {!collapsed && (
+            <button
+              type="button"
+              className="icon-btn border-transparent hidden md:inline-flex text-muted hover:text-ink hover:bg-white/[0.06] transition"
+              onClick={toggleCollapsed}
+              aria-label="Collapse sidebar (icons only)"
+              title="Collapse sidebar (icons only)"
             >
-              <EdgeMark className="h-7 w-7" />
-            </Link>
+              <IconSidebarCollapse className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Collapsed state on desktop: Single centered brand mark that smoothly reveals Expand on hover */}
+          {collapsed && (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className="group relative hidden md:flex h-10 w-10 items-center justify-center rounded-xl text-muted transition hover:bg-white/[0.06] hover:text-ink"
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              {/* Resting state: Centered Edge logo mark */}
+              <EdgeMark className="h-7 w-7 transition-all duration-150 group-hover:scale-90 group-hover:opacity-0" />
+              {/* Hover state: Expand icon fades in cleanly in accent green */}
+              <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-150 group-hover:opacity-100">
+                <IconSidebarExpand className="h-5 w-5 text-accent" />
+              </span>
+            </button>
           )}
 
           {/* Mobile close button: only on small screens */}
           <button
             type="button"
-            className="icon-btn border-transparent md:hidden"
+            className="icon-btn border-transparent md:hidden text-muted hover:text-ink"
             onClick={p.onClose}
             aria-label="Close menu"
             title="Close menu"
           >
             <IconX />
           </button>
-
-          {/* Desktop collapse button when expanded */}
-          {!collapsed && (
-            <button
-              type="button"
-              className="icon-btn border-transparent hidden md:inline-flex text-muted hover:text-ink"
-              onClick={toggleCollapsed}
-              aria-label="Collapse sidebar (icons only)"
-              title="Collapse sidebar (icons only)"
-            >
-              <IconSidebarCollapse />
-            </button>
-          )}
         </div>
 
         {/* Navigation links */}
@@ -300,24 +337,6 @@ export default function Sidebar(p: Props) {
               </Link>
             );
           })}
-
-          {/* Desktop collapse/expand toggle button at bottom of nav */}
-          <div className="pt-2 hidden md:block">
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className={`side-link w-full text-muted hover:text-ink ${
-                collapsed ? "md:justify-center md:px-0 md:gap-0" : ""
-              }`}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar (icons only)"}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? <IconSidebarExpand /> : <IconSidebarCollapse />}
-              <span className={collapsed ? "md:hidden" : ""}>
-                {collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              </span>
-            </button>
-          </div>
         </nav>
 
         {/* User profile card & sign out */}

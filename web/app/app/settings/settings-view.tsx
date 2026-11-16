@@ -7,6 +7,7 @@ import Dropdown from "../../_components/dropdown";
 import { IconCheck, IconGear, IconMoon, IconSun, IconTrash, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 const TIMEZONES = [
   "UTC",
@@ -55,6 +56,10 @@ export default function SettingsView() {
     (async () => {
       try {
         const res = await fetch("/api/settings/profile");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (alive && data.user) {
@@ -63,6 +68,11 @@ export default function SettingsView() {
             setTimezone(data.user.timezone || "UTC");
             setPreferredMarkets(data.user.preferredMarkets || []);
             setAvatarUrl(data.user.avatarUrl || null);
+            if (data.user.avatarUrl) {
+              try {
+                localStorage.setItem("edge-user-avatar", data.user.avatarUrl);
+              } catch {}
+            }
             if (data.user.theme) {
               setTheme(data.user.theme as Theme);
               applyTheme(data.user.theme as Theme);
@@ -149,8 +159,21 @@ export default function SettingsView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl, theme }),
       });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
       if (res.ok) {
         toast.success("Profile preferences saved successfully.");
+        if (avatarUrl) {
+          try {
+            localStorage.setItem("edge-user-avatar", avatarUrl);
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem("edge-user-avatar");
+          } catch {}
+        }
         // Notify sidebar & application frame to update avatar & display name immediately
         window.dispatchEvent(
           new CustomEvent("edge:profile-updated", {
@@ -159,6 +182,10 @@ export default function SettingsView() {
         );
       } else {
         const d = await res.json().catch(() => ({}));
+        if (d.error === "Not authenticated") {
+          handleSessionExpired();
+          return;
+        }
         toast.error(d.error || "Failed to update profile settings.");
       }
     } catch (err) {
@@ -182,6 +209,10 @@ export default function SettingsView() {
     toast.info("Preparing data export...", { duration: 2000 });
     try {
       const res = await fetch("/api/settings/export");
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
       if (!res.ok) {
         throw new Error("Export failed with status " + res.status);
       }
@@ -213,6 +244,10 @@ export default function SettingsView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: deleteConfirmation }),
       });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
       if (res.ok) {
         toast.success("Account deleted successfully.");
         router.push("/");

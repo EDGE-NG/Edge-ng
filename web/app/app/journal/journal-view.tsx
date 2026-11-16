@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppFrame from "../../_components/app-frame";
 import { IconBook, IconCheck, IconRetry, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 interface OverrideInfo {
   id: string;
@@ -80,6 +81,10 @@ export default function JournalView() {
     (async () => {
       try {
         const res = await fetch("/api/journal");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (alive) {
@@ -116,6 +121,11 @@ export default function JournalView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userNotes: curr.notes, lessons: curr.lessons }),
       });
+      if (res.status === 401) {
+        handleSessionExpired();
+        setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false } }));
+        return;
+      }
       if (res.ok) {
         toast.success("Journal notes saved successfully.");
         setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false, saved: true } }));
@@ -124,6 +134,11 @@ export default function JournalView() {
         }, 2500);
       } else {
         const d = await res.json().catch(() => ({}));
+        if (d.error === "Not authenticated") {
+          handleSessionExpired();
+          setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false } }));
+          return;
+        }
         toast.error(d.error || "Failed to save journal notes.");
         setNotesState((prev) => ({ ...prev, [decisionId]: { ...prev[decisionId], saving: false } }));
       }
