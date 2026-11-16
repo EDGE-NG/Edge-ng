@@ -14,6 +14,12 @@ let isRedirecting = false;
 export function handleSessionExpired(message = "Your session has expired. Redirecting to sign in...") {
   if (typeof window === "undefined" || isRedirecting) return;
   isRedirecting = true;
+  try {
+    localStorage.removeItem("edge-user-profile");
+    localStorage.removeItem("edge-user-avatar");
+  } catch {
+    /* ignore storage blocked */
+  }
   toast.error(message, { duration: 3000 });
   setTimeout(() => {
     try {

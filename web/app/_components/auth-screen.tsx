@@ -62,7 +62,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       try {
         const search = new URLSearchParams(window.location.search);
         const from = search.get("from");
-        if (from && from.startsWith("/")) {
+        if (from && from.startsWith("/") && !from.startsWith("//") && !from.startsWith("/\\")) {
           destination = from;
         }
       } catch {
