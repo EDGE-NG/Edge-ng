@@ -96,6 +96,12 @@ export default function ChecklistPage() {
     if (res.status === 401) return unauthorized();
     const d = await res.json();
     setUser(d.user);
+    if (d.user) {
+      try {
+        localStorage.setItem("edge-user-profile", JSON.stringify(d.user));
+        if (d.user.avatarUrl) localStorage.setItem("edge-user-avatar", d.user.avatarUrl);
+      } catch {}
+    }
     setChats(d.chats ?? []);
   }, [unauthorized]);
 
@@ -260,6 +266,10 @@ export default function ChecklistPage() {
   }
 
   async function signOut() {
+    try {
+      localStorage.removeItem("edge-user-profile");
+      localStorage.removeItem("edge-user-avatar");
+    } catch {}
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();

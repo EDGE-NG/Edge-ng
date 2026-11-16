@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar, { MenuButton, useSidebar, type Section } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 export default function AppFrame({
   active,
@@ -24,15 +25,25 @@ export default function AppFrame({
   useEffect(() => {
     let alive = true;
     (async () => {
-      const res = await fetch("/api/auth/me");
-      if (res.status === 401) {
-        // stale cookie: clear it so /login doesn't bounce back here
-        await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-        router.replace("/login");
-        return;
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
+        if (res.ok) {
+          const d = await res.json();
+          if (alive && d.user) {
+            setUser(d.user);
+            try {
+              localStorage.setItem("edge-user-profile", JSON.stringify(d.user));
+              if (d.user.avatarUrl) localStorage.setItem("edge-user-avatar", d.user.avatarUrl);
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user profile in AppFrame:", err);
       }
-      const d = await res.json();
-      if (alive) setUser(d.user);
     })();
 
     function handleProfileUpdate(e: Event) {
@@ -54,9 +65,13 @@ export default function AppFrame({
       alive = false;
       window.removeEventListener("edge:profile-updated", handleProfileUpdate);
     };
-  }, [router]);
+  }, []);
 
   async function signOut() {
+    try {
+      localStorage.removeItem("edge-user-profile");
+      localStorage.removeItem("edge-user-avatar");
+    } catch {}
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();

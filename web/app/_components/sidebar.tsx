@@ -49,6 +49,7 @@ const PREFERENCES_NAV: NavItem[] = [
 
 const COLLAPSED_KEY = "edge-sidebar-collapsed";
 const AVATAR_KEY = "edge-user-avatar";
+const PROFILE_KEY = "edge-user-profile";
 
 function subscribeCollapsed(cb: () => void) {
   window.addEventListener("storage", cb);
@@ -126,12 +127,15 @@ export default function Sidebar(p: Props) {
       const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
       if (!custom.detail) return;
       setProfileOverride(custom.detail);
-      if (custom.detail.avatarUrl) {
-        try {
-          localStorage.setItem(AVATAR_KEY, custom.detail.avatarUrl);
-        } catch {
-          /* storage blocked */
-        }
+      try {
+        if (custom.detail.avatarUrl) localStorage.setItem(AVATAR_KEY, custom.detail.avatarUrl);
+        const existing = localStorage.getItem(PROFILE_KEY);
+        const parsed = existing ? JSON.parse(existing) : {};
+        if (custom.detail.displayName !== undefined) parsed.name = custom.detail.displayName;
+        if (custom.detail.avatarUrl !== undefined) parsed.avatarUrl = custom.detail.avatarUrl;
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(parsed));
+      } catch {
+        /* storage blocked */
       }
     }
     window.addEventListener("edge:profile-updated", handleProfileUpdate);
@@ -139,19 +143,30 @@ export default function Sidebar(p: Props) {
   }, []);
 
   useEffect(() => {
-    if (p.user?.avatarUrl) {
+    if (p.user) {
       try {
-        localStorage.setItem(AVATAR_KEY, p.user.avatarUrl);
+        if (p.user.avatarUrl) localStorage.setItem(AVATAR_KEY, p.user.avatarUrl);
+        localStorage.setItem(
+          PROFILE_KEY,
+          JSON.stringify({
+            name: p.user.name,
+            email: p.user.email,
+            avatarUrl: p.user.avatarUrl,
+          })
+        );
       } catch {
         /* storage blocked */
       }
     }
-  }, [p.user?.avatarUrl]);
+  }, [p.user]);
 
+  let cachedUser: { name?: string | null; email?: string; avatarUrl?: string | null } | null = null;
   let cachedAvatar: string | null = null;
   if (typeof window !== "undefined") {
     try {
       cachedAvatar = localStorage.getItem(AVATAR_KEY);
+      const rawProfile = localStorage.getItem(PROFILE_KEY);
+      if (rawProfile) cachedUser = JSON.parse(rawProfile);
     } catch {
       /* storage blocked */
     }
@@ -168,12 +183,15 @@ export default function Sidebar(p: Props) {
   }, []);
 
   const currentUser = {
-    name: profileOverride?.displayName !== undefined ? profileOverride.displayName : p.user?.name ?? null,
-    email: p.user?.email ?? "",
+    name:
+      profileOverride?.displayName !== undefined
+        ? profileOverride.displayName
+        : (p.user?.name ?? cachedUser?.name ?? null),
+    email: p.user?.email || cachedUser?.email || "",
     avatarUrl:
       profileOverride?.avatarUrl !== undefined
         ? profileOverride.avatarUrl
-        : (p.user?.avatarUrl ?? cachedAvatar),
+        : (p.user?.avatarUrl ?? cachedUser?.avatarUrl ?? cachedAvatar),
   };
 
   const initial = (currentUser.name || currentUser.email || "?").trim().charAt(0).toUpperCase();
