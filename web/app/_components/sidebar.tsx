@@ -3,13 +3,25 @@
 /**
  * Edge's side navigation (PR-CH-6), shared by every signed-in page.
  * Phones: slides over the page (menu button / X). Desktop: sits beside the
- * page and collapses with X; the menu button brings it back. Desktop
- * remembers the choice between visits.
+ * page without the X button; users can collapse it to an icon-only mode
+ * (remembered in localStorage) to save screen space while keeping all links accessible.
  */
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import EdgeMark from "./edge-mark";
-import { IconBook, IconCandles, IconChecklist, IconGauge, IconGear, IconImages, IconLogout, IconMenu, IconX } from "./icons";
+import {
+  IconBook,
+  IconCandles,
+  IconChecklist,
+  IconGauge,
+  IconGear,
+  IconImages,
+  IconLogout,
+  IconMenu,
+  IconSidebarCollapse,
+  IconSidebarExpand,
+  IconX,
+} from "./icons";
 
 export type Section = "dashboard" | "workspace" | "journal" | "checklist" | "evidence" | "settings";
 
@@ -35,53 +47,56 @@ const PREFERENCES_NAV: NavItem[] = [
   { key: "settings", href: "/app/settings", label: "Settings", Icon: IconGear },
 ];
 
-const DESKTOP = "(min-width: 768px)";
-const STORE_KEY = "edge-sidebar";
+const COLLAPSED_KEY = "edge-sidebar-collapsed";
+
+function subscribeCollapsed(cb: () => void) {
+  window.addEventListener("storage", cb);
+  window.addEventListener("edge:sidebar-collapsed-change", cb);
+  return () => {
+    window.removeEventListener("storage", cb);
+    window.removeEventListener("edge:sidebar-collapsed-change", cb);
+  };
+}
+
+function getCollapsedSnapshot() {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function getCollapsedServerSnapshot() {
+  return false;
+}
 
 /**
- * Open/closed state. `null` = default, decided by CSS (open on desktop,
- * closed on phones), so nothing flashes on load.
+ * Open/closed state for mobile drawer.
  */
 export function useSidebar() {
   const [open, setOpen] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    let closed = false;
-    try {
-      closed = window.matchMedia(DESKTOP).matches && localStorage.getItem(STORE_KEY) === "closed";
-    } catch {
-      /* storage blocked: keep the default */
-    }
-    if (!closed) return;
-    // read once after mount (never during prerender); deferred so the effect stays side-effect only
-    const id = requestAnimationFrame(() => setOpen(false));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
   const toggle = useCallback((next: boolean) => {
     setOpen(next);
-    try {
-      if (window.matchMedia(DESKTOP).matches) localStorage.setItem(STORE_KEY, next ? "open" : "closed");
-    } catch {
-      /* not remembered: fine */
-    }
   }, []);
 
-  /** After picking something on a phone, get the overlay out of the way. */
+  /** After picking something on a phone, if needed */
   const closeIfMobile = useCallback(() => {
-    if (!window.matchMedia(DESKTOP).matches) setOpen(null);
+    if (typeof window !== "undefined" && !window.matchMedia("(min-width: 768px)").matches) {
+      setOpen(null);
+    }
   }, []);
 
   return { open, toggle, closeIfMobile };
 }
 
-/** The ☰ button for the page header; hidden while the sidebar is showing. */
+/** The ☰ button for the page header; shown only on mobile when sidebar is closed. */
 export function MenuButton({ open, onOpen }: { open: boolean | null; onOpen: () => void }) {
   if (open === true) return null;
   return (
     <button
       type="button"
-      className={`icon-btn shrink-0 border-transparent ${open === null ? "md:hidden" : ""}`}
+      className="icon-btn shrink-0 border-transparent md:hidden"
       onClick={onOpen}
       aria-label="Open menu"
       title="Open menu"
@@ -102,6 +117,7 @@ interface Props {
 }
 
 export default function Sidebar(p: Props) {
+  const collapsed = useSyncExternalStore(subscribeCollapsed, getCollapsedSnapshot, getCollapsedServerSnapshot);
   const [profileOverride, setProfileOverride] = useState<{ displayName?: string; avatarUrl?: string | null } | null>(null);
 
   useEffect(() => {
@@ -112,6 +128,16 @@ export default function Sidebar(p: Props) {
     }
     window.addEventListener("edge:profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    try {
+      const current = localStorage.getItem(COLLAPSED_KEY) === "true";
+      localStorage.setItem(COLLAPSED_KEY, (!current).toString());
+      window.dispatchEvent(new Event("edge:sidebar-collapsed-change"));
+    } catch {
+      /* storage blocked */
+    }
   }, []);
 
   const currentUser = {
@@ -132,42 +158,94 @@ export default function Sidebar(p: Props) {
         onClick={p.onClose}
         aria-hidden="true"
       />
-      {/* phones: slides over the page; desktop: sits beside it and collapses
-          (negative margin) so the content takes the full width when closed */}
+      {/* phones: slides over the page; desktop: sits beside it and collapses to icon-only mode */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col border-r border-line bg-surface transition-[transform,margin] duration-200 md:relative md:z-auto md:translate-x-0 ${
-          p.open === true
-            ? "translate-x-0 md:ml-0"
-            : p.open === false
-              ? "-translate-x-full md:-ml-[260px]"
-              : "-translate-x-full md:ml-0" /* default: closed on phones, open on desktop */
+        className={`fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-line bg-surface transition-[width,transform] duration-200 ease-in-out md:relative md:z-auto md:translate-x-0 ${
+          collapsed ? "w-[260px] md:w-[68px]" : "w-[260px]"
+        } ${
+          p.open === true ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
         aria-label="Edge navigation"
-        inert={p.open === false || undefined}
       >
-        <div className="flex h-16 items-center justify-between px-4">
-          <Link href="/app" className="inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em]">
-            <EdgeMark className="h-8 w-10" />
+        {/* Header */}
+        <div
+          className={`flex h-16 items-center transition-all ${
+            collapsed ? "justify-between px-4 md:justify-center md:px-0" : "justify-between px-4"
+          }`}
+        >
+          <Link
+            href="/app"
+            className={`inline-flex items-center gap-2.5 text-[1.15rem] font-semibold tracking-[-0.04em] ${
+              collapsed ? "md:hidden" : ""
+            }`}
+          >
+            <EdgeMark className="h-8 w-10 shrink-0" />
             Edge
           </Link>
-          <button type="button" className="icon-btn border-transparent" onClick={p.onClose} aria-label="Close menu" title="Close menu">
+
+          {/* Desktop icon-only mark */}
+          {collapsed && (
+            <Link
+              href="/app"
+              className="hidden md:inline-flex items-center justify-center p-2 rounded-lg hover:bg-white/[0.04] transition"
+              title="Edge (Dashboard)"
+              aria-label="Edge Dashboard"
+            >
+              <EdgeMark className="h-7 w-7" />
+            </Link>
+          )}
+
+          {/* Mobile close button: only on small screens */}
+          <button
+            type="button"
+            className="icon-btn border-transparent md:hidden"
+            onClick={p.onClose}
+            aria-label="Close menu"
+            title="Close menu"
+          >
             <IconX />
           </button>
+
+          {/* Desktop collapse button when expanded */}
+          {!collapsed && (
+            <button
+              type="button"
+              className="icon-btn border-transparent hidden md:inline-flex text-muted hover:text-ink"
+              onClick={toggleCollapsed}
+              aria-label="Collapse sidebar (icons only)"
+              title="Collapse sidebar (icons only)"
+            >
+              <IconSidebarCollapse />
+            </button>
+          )}
         </div>
 
-        <nav className="mt-2 flex-1 space-y-0.5 px-3" aria-label="Sections">
+        {/* Navigation links */}
+        <nav className={`mt-2 flex-1 space-y-0.5 ${collapsed ? "px-3 md:px-2" : "px-3"}`} aria-label="Sections">
           {PRIMARY_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return (
-              <Link key={key} href={href} className="side-link" aria-current={current}>
-                <Icon /> {label}
+              <Link
+                key={key}
+                href={href}
+                className={`side-link ${collapsed ? "md:justify-center md:px-0 md:gap-0" : ""}`}
+                aria-current={current}
+                title={label}
+                aria-label={label}
+              >
+                <Icon />
+                <span className={collapsed ? "md:hidden" : ""}>{label}</span>
               </Link>
             );
           })}
 
           <div className="pt-3 pb-1">
             <div className="border-t border-line/60" />
-            <span className="mt-2.5 block px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60">
+            <span
+              className={`mt-2.5 block px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted/60 ${
+                collapsed ? "md:hidden" : ""
+              }`}
+            >
               Your Edge
             </span>
           </div>
@@ -178,15 +256,26 @@ export default function Sidebar(p: Props) {
               <button
                 key={key}
                 type="button"
-                className="side-link"
+                className={`side-link ${collapsed ? "md:justify-center md:px-0 md:gap-0" : ""}`}
                 aria-current={current}
                 onClick={p.onChecklist}
+                title={label}
+                aria-label={label}
               >
-                <Icon /> {label}
+                <Icon />
+                <span className={collapsed ? "md:hidden" : ""}>{label}</span>
               </button>
             ) : (
-              <Link key={key} href={href} className="side-link" aria-current={current}>
-                <Icon /> {label}
+              <Link
+                key={key}
+                href={href}
+                className={`side-link ${collapsed ? "md:justify-center md:px-0 md:gap-0" : ""}`}
+                aria-current={current}
+                title={label}
+                aria-label={label}
+              >
+                <Icon />
+                <span className={collapsed ? "md:hidden" : ""}>{label}</span>
               </Link>
             );
           })}
@@ -198,19 +287,53 @@ export default function Sidebar(p: Props) {
           {PREFERENCES_NAV.map(({ key, href, label, Icon }) => {
             const current = p.active === key ? "page" : undefined;
             return (
-              <Link key={key} href={href} className="side-link" aria-current={current}>
-                <Icon /> {label}
+              <Link
+                key={key}
+                href={href}
+                className={`side-link ${collapsed ? "md:justify-center md:px-0 md:gap-0" : ""}`}
+                aria-current={current}
+                title={label}
+                aria-label={label}
+              >
+                <Icon />
+                <span className={collapsed ? "md:hidden" : ""}>{label}</span>
               </Link>
             );
           })}
+
+          {/* Desktop collapse/expand toggle button at bottom of nav */}
+          <div className="pt-2 hidden md:block">
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              className={`side-link w-full text-muted hover:text-ink ${
+                collapsed ? "md:justify-center md:px-0 md:gap-0" : ""
+              }`}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar (icons only)"}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <IconSidebarExpand /> : <IconSidebarCollapse />}
+              <span className={collapsed ? "md:hidden" : ""}>
+                {collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              </span>
+            </button>
+          </div>
         </nav>
 
-        <div className="border-t border-line p-3">
-          <div className="flex items-center justify-between gap-1 rounded-xl p-1 transition hover:bg-white/[0.04]">
+        {/* User profile card & sign out */}
+        <div className={`border-t border-line ${collapsed ? "p-3 md:p-2" : "p-3"}`}>
+          <div
+            className={`flex items-center rounded-xl transition hover:bg-white/[0.04] ${
+              collapsed ? "justify-between gap-1 p-1 md:flex-col md:gap-2 md:p-1" : "justify-between gap-1 p-1"
+            }`}
+          >
             <Link
               href="/app/settings"
-              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1 transition group"
-              title="Trader profile & settings"
+              className={`flex min-w-0 items-center rounded-lg transition group ${
+                collapsed ? "flex-1 gap-3 px-1.5 py-1 md:flex-initial md:justify-center md:p-1" : "flex-1 gap-3 px-1.5 py-1"
+              }`}
+              title={currentUser?.name ? `${currentUser.name} (Settings)` : "Trader profile & settings"}
+              aria-label="Trader profile & settings"
             >
               {currentUser?.avatarUrl ? (
                 <img
@@ -227,7 +350,7 @@ export default function Sidebar(p: Props) {
                   {initial}
                 </span>
               )}
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 flex-1 ${collapsed ? "md:hidden" : ""}`}>
                 <p className="truncate text-sm font-medium text-ink group-hover:text-accent transition-colors">
                   {currentUser?.name || "Trader"}
                 </p>

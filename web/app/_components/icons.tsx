@@ -132,3 +132,15 @@ export const IconMoon = ({ className = "h-4 w-4" }: P) => (
     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
   </svg>
 );
+export const IconSidebarCollapse = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M9 3v18M14 9l-3 3 3 3" />
+  </svg>
+);
+export const IconSidebarExpand = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M9 3v18M13 15l3-3-3-3" />
+  </svg>
+);
