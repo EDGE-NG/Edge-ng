@@ -62,9 +62,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       try {
         const search = new URLSearchParams(window.location.search);
         const from = search.get("from");
-        if (from && from.startsWith("/") && !from.startsWith("//") && !from.startsWith("/\\")) {
-          destination = from;
-        }
+        const url = new URL(from ?? "/checklist", window.location.origin);
+        if (url.origin === window.location.origin) destination = url.pathname + url.search;
       } catch {
         /* fallback to /checklist */
       }
