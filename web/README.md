@@ -11,6 +11,7 @@ Next.js 16 (App Router) + Tailwind CSS. Built by Daniel and Mayokun. See the roo
 | `app/checklist/` | Chat-first edge builder: plan → checklist (4.1, 4.2, flow F2) |
 | `app/app/evidence/` | Evidence library (4.3, flow F4) |
 | `app/app/workspace/` | Trade workspace with chart and pre-trade gate (4.4, 4.5, flows F5 to F7) |
+| `app/app/alerts/` | Checklist alerts: Edge watches markets with the trader's checklist and notifies them |
 | `app/app/journal/`, `app/app/settings/` | Journal and settings |
 | `app/api/` | Server routes for auth, chats, evidence, market data, transcription and the workspace |
 | `lib/db.ts` | Database access (Supabase Postgres) |
@@ -53,6 +54,16 @@ GEMINI_VISION_MODEL=
 OPENROUTER_MODEL=
 OPENROUTER_VISION_MODEL=
 DATABASE_POOL_MAX=
+
+# Checklist alerts (optional; see "Checklist alerts" below)
+CRON_SECRET=
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=
+RESEND_API_KEY=
+ALERTS_EMAIL_FROM=
+ALERTS_MAX_MONITORS=
+APP_URL=
 ```
 
 - `DATABASE_URL`: use the **Transaction pooler** connection string (port 6543) with the database password.
@@ -70,3 +81,28 @@ npx supabase start   # local Supabase; applies supabase/migrations/
 It prints a local API URL, anon key, service role key and database URL to put in `web/.env.local`. Local sign-ups don't need email confirmation.
 
 Run from the repo root: `npm run dev:web`.
+
+## Checklist alerts
+
+The trader picks markets (e.g. Gold, Nasdaq 100) for Edge to watch with an approved checklist (`/app/alerts`). On each new candle the server checks the checklist's hard-gate chart rules from its own price data, with the same rule check as the workspace (`lib/alerts.ts`). When they all pass, Edge stores an alert and sends a browser/phone notification and an email. An alert is not an approval: the trader checks the trade in the workspace and the gate decides. Tables: `supabase/migrations/0003_checklist_alerts.sql`.
+
+**1. Scheduler.** Something must call `GET /api/alerts/run` every 5 minutes with the header `Authorization: Bearer <CRON_SECRET>`. Vercel's free plan only runs cron jobs once a day, so use one of:
+
+- **Supabase pg_cron** (Database → Extensions: enable `pg_cron` and `pg_net`), then in the SQL editor:
+  ```sql
+  select cron.schedule('edge-alerts', '*/5 * * * *', $$
+    select net.http_get(
+      url := 'https://edge-ng.vercel.app/api/alerts/run',
+      headers := jsonb_build_object('Authorization', 'Bearer <CRON_SECRET>')
+    ) $$);
+  ```
+- an outside cron service (e.g. cron-job.org) with the same URL and header;
+- Vercel Cron, on a paid plan, with a `crons` entry in `vercel.json` (Vercel sends `CRON_SECRET` itself).
+
+Without a scheduler, alerts only run when the trader presses **Check now**.
+
+**2. Browser and phone notifications (Web Push).** Generate keys once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. `VAPID_SUBJECT` is a contact URL or `mailto:` address (defaults to the app URL). Works in Chrome, Edge, Firefox and Android; on iPhone only after the trader adds Edge to the Home Screen (iOS 16.4+).
+
+**3. Email.** A [Resend](https://resend.com) API key in `RESEND_API_KEY`, and `ALERTS_EMAIL_FROM`, e.g. `Edge <alerts@edge.ng>` (the domain must be verified in Resend).
+
+**Cost.** Each check is one AI call per chart rule on each timeframe that has a new candle, and one market-data request per timeframe. Checks stop at the first failing rule, skip closed markets, and higher timeframes are re-checked only when their candle closes. `ALERTS_MAX_MONITORS` (default 3) caps the markets per trader. Twelve Data's free plan allows 800 requests a day.

@@ -8,7 +8,7 @@ import Link from "next/link";
 import AppFrame from "./app-frame";
 import type { Section } from "./sidebar";
 
-const COPY: Record<Exclude<Section, "checklist">, { title: string; lead: string; points: string[]; prd: string }> = {
+const COPY: Record<Exclude<Section, "checklist" | "alerts">, { title: string; lead: string; points: string[]; prd: string }> = {
   evidence: {
     title: "Evidence library",
     lead: "Show Edge what each rule looks like on a chart.",
@@ -61,7 +61,7 @@ const COPY: Record<Exclude<Section, "checklist">, { title: string; lead: string;
   },
 };
 
-export default function ComingNext({ section }: { section: Exclude<Section, "checklist"> }) {
+export default function ComingNext({ section }: { section: Exclude<Section, "checklist" | "alerts"> }) {
   const c = COPY[section];
   return (
     <AppFrame active={section} title={c.title}>
