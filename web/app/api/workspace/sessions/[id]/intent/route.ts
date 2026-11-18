@@ -12,6 +12,7 @@ import {
   type Check,
   type Ticket,
 } from "@/lib/workspace";
+import { overrideAllowance } from "@/lib/overrides";
 import { getSession, refreshForGate, ruleStates, sessionRules, tradesToday } from "@/lib/workspace-session";
 
 const PRICE_TOLERANCE = 0.0015; // 0.15% of price (REQ-GT-3)
@@ -197,6 +198,8 @@ async function decisionView(decisionId: string) {
     validUntil: d.valid_until as string | null,
     referencePrice: d.reference_price as number,
     resolution: (d.resolution as string) ?? null,
+    // weekly override allowance, shown next to the Override button
+    overrides: d.result === "approved" ? null : await overrideAllowance(d.user_id as string),
     ticket: {
       instrument: d.instrument,
       side: d.side,
