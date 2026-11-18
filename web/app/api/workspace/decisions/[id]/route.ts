@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { db, json, uuid } from "@/lib/db";
 import { findInstrument, getCandles } from "@/lib/market";
+import { overrideAllowance, resetText } from "@/lib/overrides";
 
 /**
  * POST { action, reason? } on a gate decision:
  *  accept   -> the trader accepts the denial; the trade is not taken (PR-GT-4)
  *  override -> one confirmation, optional reason; recorded with the rules it
- *              overrode, never blocked or judged (PR-OV-1, REQ-GT-6)
+ *              overrode, never judged (PR-OV-1, REQ-GT-6). Limited to
+ *              OVERRIDES_PER_WEEK per trader per market week, which resets
+ *              Sunday 18:00 New York (new decision, lib/overrides.ts); over
+ *              the limit -> 429 override_limit
  *  placed   -> Phase 1: the trader placed it on their platform. Allowed for a
  *              still-valid approval (expiry + price tolerance, REQ-GT-3) or
  *              after an override.
@@ -59,18 +63,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       missing: Array<{ itemKey: string; text: string }>;
       ticket: string[];
     };
-    // One override per decision (pressing Override again is a no-op).
-    await db.run(
-      `INSERT INTO overrides (id, decision_id, user_id, rules_overridden, reason_text)
-       VALUES (?, ?, ?, ?, ?) ON CONFLICT (decision_id) DO NOTHING`,
-      uuid(),
-      d.id,
-      user.id,
-      { failing: reasons.failing, missing: reasons.missing, ticket: reasons.ticket },
-      typeof body.reason === "string" ? body.reason.trim().slice(0, 500) || null : null
-    );
-    if (!d.resolution) await resolve("overridden", "decided");
-    return NextResponse.json({ ok: true, resolution: "overridden" });
+    // Pressing Override again on an overridden decision is a no-op and uses nothing.
+    if (d.resolution === "overridden") {
+      return NextResponse.json({ ok: true, resolution: "overridden", overrides: await overrideAllowance(user.id) });
+    }
+    // Weekly allowance (new decision, see lib/overrides.ts). The lock makes two
+    // presses at once count one after the other, so nobody gets a 4th.
+    const outcome = await db.tx(async (t) => {
+      await t.one("SELECT pg_advisory_xact_lock(hashtext(?))", `overrides:${user.id}`);
+      const allowance = await overrideAllowance(user.id, t);
+      if (allowance.left === 0) return { blocked: true as const, allowance };
+      // One override per decision.
+      await t.run(
+        `INSERT INTO overrides (id, decision_id, user_id, rules_overridden, reason_text)
+         VALUES (?, ?, ?, ?, ?) ON CONFLICT (decision_id) DO NOTHING`,
+        uuid(),
+        d.id,
+        user.id,
+        { failing: reasons.failing, missing: reasons.missing, ticket: reasons.ticket },
+        typeof body.reason === "string" ? body.reason.trim().slice(0, 500) || null : null
+      );
+      await t.run("UPDATE gate_decisions SET resolution = 'overridden', resolved_at = now() WHERE id = ?", d.id);
+      await t.run("UPDATE trade_intents SET status = 'decided' WHERE id = ?", d.intent_id);
+      return { blocked: false as const, allowance: await overrideAllowance(user.id, t) };
+    });
+    if (outcome.blocked) {
+      const { limit, resetsAt } = outcome.allowance;
+      return NextResponse.json(
+        {
+          error: `You've used all ${limit} overrides for this week. They reset to ${limit} on ${resetText(resetsAt)}. You can still accept the result.`,
+          code: "override_limit",
+          overrides: outcome.allowance,
+        },
+        { status: 429 }
+      );
+    }
+    return NextResponse.json({ ok: true, resolution: "overridden", overrides: outcome.allowance });
   }
 
   if (body.action === "placed") {

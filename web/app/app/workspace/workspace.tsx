@@ -76,6 +76,20 @@ interface Decision {
     softFails: Array<{ itemKey: string; text: string; reason: string }>;
   };
   ticket: { instrument: string; side: string; entry: number; stop: number | null; target: number | null; riskPct: number | null; riskReward: number | null };
+  /** weekly override allowance (lib/overrides.ts); null for an approved trade */
+  overrides?: OverrideAllowance | null;
+}
+interface OverrideAllowance {
+  limit: number;
+  used: number;
+  left: number;
+  /** next market-week start: Sunday 18:00 New York */
+  resetsAt: string;
+}
+
+/** The reset time in the trader's own time zone, e.g. "Sun 23 Nov, 23:00". */
+function resetWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 const ASSET_LABEL = { crypto: "Crypto", forex: "Forex", metals: "Metals", indices: "Indices" } as const;
@@ -650,6 +664,7 @@ function TicketPanel({
       {error && <p role="alert" className="px-4 pb-4 text-sm text-fail">{error}</p>}
       {decision && (
         <DecisionCard
+          key={decision.decisionId}
           decision={decision}
           decimals={inst.decimals}
           currentTf={tf}
@@ -685,6 +700,8 @@ function DecisionCard({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [allowance, setAllowance] = useState<OverrideAllowance | null>(decision.overrides ?? null);
+  const noOverridesLeft = allowance != null && allowance.left === 0;
 
   useEffect(() => {
     if (!decision.validUntil || decision.resolution) return;
@@ -702,9 +719,11 @@ function DecisionCard({
         body: JSON.stringify({ action, reason }),
       });
       const d = await res.json().catch(() => ({}));
+      if (d.overrides) setAllowance(d.overrides);
       if (!res.ok) {
         setMsg(d.error || "Couldn't save that.");
         if (d.code === "expired" || d.code === "price_moved") onResolved("expired");
+        if (d.code === "override_limit") setOverriding(false);
         return;
       }
       onResolved(d.resolution);
@@ -789,22 +808,48 @@ function DecisionCard({
         ) : decision.resolution === "overridden" ? (
           <div className="space-y-2">
             <p className="text-sm text-ink/80">Override recorded. If you place the trade, confirm it here.</p>
+            {allowance && (
+              <p className="text-xs text-ink/60">
+                {allowance.left} of {allowance.limit} overrides left this week.
+              </p>
+            )}
             <button className="btn btn-sm" disabled={busy} onClick={() => act("placed")}>I placed this trade</button>
           </div>
-        ) : overriding ? (
+        ) : overriding && !noOverridesLeft ? (
           <div className="space-y-2">
             <label className="block text-sm text-ink/80">Why are you overriding? <span className="text-ink/50">(optional)</span>
               <input className="input mt-1 py-2 text-sm" value={reason} maxLength={500} onChange={(x) => setReason(x.target.value)} />
             </label>
+            {allowance && (
+              <p className="text-xs text-ink/60">
+                This uses 1 of your {allowance.left} override{allowance.left === 1 ? "" : "s"} left this week.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => act("override")}>Override and record it</button>
               <button className="btn btn-sm" onClick={() => setOverriding(false)}>Back</button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
-            <button className="btn btn-main btn-sm" disabled={busy} onClick={() => act("accept")}>Accept, don&apos;t trade</button>
-            <button className="btn btn-sm" disabled={busy} onClick={() => setOverriding(true)}>Override</button>
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-main btn-sm" disabled={busy} onClick={() => act("accept")}>Accept, don&apos;t trade</button>
+              <button
+                className="btn btn-sm"
+                disabled={busy || noOverridesLeft}
+                aria-describedby="override-allowance"
+                onClick={() => setOverriding(true)}
+              >
+                Override
+              </button>
+            </div>
+            {allowance && (
+              <p id="override-allowance" className="text-xs text-ink/60">
+                {noOverridesLeft
+                  ? `You've used all ${allowance.limit} overrides for this week. They reset to ${allowance.limit} when the new market week opens (${resetWhen(allowance.resetsAt)}).`
+                  : `${allowance.left} of ${allowance.limit} overrides left this week. Resets ${resetWhen(allowance.resetsAt)}.`}
+              </p>
+            )}
           </div>
         )}
         {msg && <p role="alert" className="mt-2 text-sm text-fail">{msg}</p>}
