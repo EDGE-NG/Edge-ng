@@ -11,6 +11,7 @@ import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
 import { IconCheck, IconImages, IconMic, IconPlus, IconRetry, IconTrash, IconX } from "../../_components/icons";
 import { useVoiceNote } from "../../_components/use-voice-note";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 /* ------------------------------------------------------------- types ----- */
 
@@ -86,7 +87,10 @@ type Dialog = { mode: "new"; rule: Rule } | { mode: "detail"; rule: Rule; image:
 async function fetchLibrary(): Promise<{ lists?: Checklist[]; error?: string }> {
   try {
     const res = await fetch("/api/evidence");
-    if (res.status === 401) return {}; // AppFrame handles sign-in
+    if (res.status === 401) {
+      handleSessionExpired();
+      return {};
+    }
     const d = await res.json();
     if (!res.ok) return { error: d.error || "Couldn't load your evidence." };
     return { lists: d.checklists as Checklist[] };

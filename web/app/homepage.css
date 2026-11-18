@@ -40,10 +40,28 @@ header{position:sticky;top:0;z-index:30;padding-top:env(safe-area-inset-top,0px)
 /* --- app additions (scripts/build-homepage.mjs) --- */
 /* the marquee references a 'tick' animation the design never defines */
 @keyframes tick{to{transform:translateX(-50%)}}
-/* header: Sign in + Get started */
-.landing-page .hdr-cta{display:flex;align-items:center;gap:8px}
-.landing-page .btn-ghost{min-height:40px;padding:0 18px;font-size:.95rem;border-color:transparent;color:var(--muted)}
+/* header: Sign in + Get started responsive navbar */
+.landing-page .btn{white-space:nowrap}
+.landing-page .hdr-cta{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.landing-page .btn-ghost{min-height:40px;padding:0 18px;font-size:.95rem;border-color:transparent;color:var(--muted);white-space:nowrap}
 .landing-page .btn-ghost:hover{color:var(--text);background:rgba(255,255,255,.06)}
-@media (max-width:540px){.landing-page .btn-ghost{padding:0 12px}}
+@media (max-width:540px){
+  .landing-page .bar{gap:8px}
+  .landing-page .brand{font-size:1.15rem;gap:8px}
+  .landing-page .mark{width:36px;height:30px}
+  .landing-page .hdr-cta{gap:6px}
+  .landing-page .btn-ghost{min-height:36px;padding:0 10px;font-size:.88rem}
+  .landing-page .hdr-cta .btn-main{min-height:38px;padding:0 6px 0 14px;font-size:.88rem;gap:8px}
+  .landing-page .hdr-cta .btn-main::after{width:26px;height:26px;font-size:.85rem}
+}
+@media (max-width:380px){
+  .landing-page .bar{gap:4px}
+  .landing-page .brand{font-size:1.05rem;gap:6px}
+  .landing-page .mark{width:32px;height:26px}
+  .landing-page .hdr-cta{gap:4px}
+  .landing-page .btn-ghost{padding:0 6px;font-size:.82rem}
+  .landing-page .hdr-cta .btn-main{padding:0 4px 0 10px;font-size:.82rem;gap:6px}
+  .landing-page .hdr-cta .btn-main::after{width:24px;height:24px;font-size:.8rem}
+}
 /* the app's global .card adds an accent hairline; the landing cards have none */
 .landing-page .card::before{display:none}

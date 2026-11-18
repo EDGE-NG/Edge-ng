@@ -18,6 +18,7 @@ import ChecklistCard from "./checklist-card";
 import Composer, { type ComposerHandle } from "./composer";
 import { IconCheck, IconMic, IconPlus, IconRetry } from "../_components/icons";
 import Sidebar, { MenuButton, useSidebar } from "../_components/sidebar";
+import { ThemeToggle } from "../_components/theme-toggle";
 import { PURPOSE_LABEL, type ChatSummaryWithEdge, type ChatView, type Message, type Rule } from "./types";
 
 const EXAMPLES = [
@@ -53,7 +54,24 @@ export default function ChecklistPage() {
   const composer = useRef<ComposerHandle>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
-  const [user, setUser] = useState<{ name: string | null; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string | null; email: string; avatarUrl?: string | null } | null>(null);
+
+  useEffect(() => {
+    function handleProfileUpdate(e: Event) {
+      const custom = e as CustomEvent<{ displayName?: string; avatarUrl?: string | null }>;
+      if (!custom.detail) return;
+      setUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          name: custom.detail.displayName !== undefined ? custom.detail.displayName : prev.name,
+          avatarUrl: custom.detail.avatarUrl !== undefined ? custom.detail.avatarUrl : prev.avatarUrl,
+        };
+      });
+    }
+    window.addEventListener("edge:profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("edge:profile-updated", handleProfileUpdate);
+  }, []);
   const [chats, setChats] = useState<ChatSummaryWithEdge[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -78,6 +96,12 @@ export default function ChecklistPage() {
     if (res.status === 401) return unauthorized();
     const d = await res.json();
     setUser(d.user);
+    if (d.user) {
+      try {
+        localStorage.setItem("edge-user-profile", JSON.stringify(d.user));
+        if (d.user.avatarUrl) localStorage.setItem("edge-user-avatar", d.user.avatarUrl);
+      } catch {}
+    }
     setChats(d.chats ?? []);
   }, [unauthorized]);
 
@@ -242,6 +266,10 @@ export default function ChecklistPage() {
   }
 
   async function signOut() {
+    try {
+      localStorage.removeItem("edge-user-profile");
+      localStorage.removeItem("edge-user-avatar");
+    } catch {}
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();
@@ -290,13 +318,15 @@ export default function ChecklistPage() {
               )}
             </>
           )}
-          {/* Only for traders who already have a checklist; never on a first visit. */}
-          {hasChecklist && mode !== "compose" && mode !== "loading" && (
-            <button type="button" onClick={createNew} className="create-btn ml-auto shrink-0">
-              <IconPlus className="h-3.5 w-3.5" />
-              <span>Create new checklist</span>
-            </button>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            {hasChecklist && mode !== "compose" && mode !== "loading" && (
+              <button type="button" onClick={createNew} className="create-btn shrink-0">
+                <IconPlus className="h-3.5 w-3.5" />
+                <span>Create new checklist</span>
+              </button>
+            )}
+          </div>
         </header>
 
         {mode === "loading" ? (

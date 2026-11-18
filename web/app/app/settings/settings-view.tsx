@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
-import { IconCheck, IconGear, IconLock, IconTrash, IconX } from "../../_components/icons";
+import { IconCheck, IconGear, IconMoon, IconSun, IconTrash, IconX } from "../../_components/icons";
+import { toast } from "../../_components/toaster";
+import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
+import { handleSessionExpired } from "@/lib/client-auth";
 
 const TIMEZONES = [
   "UTC",
@@ -37,10 +40,10 @@ export default function SettingsView() {
   const [timezone, setTimezone] = useState("UTC");
   const [preferredMarkets, setPreferredMarkets] = useState<string[]>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Delete Account State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -53,6 +56,10 @@ export default function SettingsView() {
     (async () => {
       try {
         const res = await fetch("/api/settings/profile");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (alive && data.user) {
@@ -61,10 +68,24 @@ export default function SettingsView() {
             setTimezone(data.user.timezone || "UTC");
             setPreferredMarkets(data.user.preferredMarkets || []);
             setAvatarUrl(data.user.avatarUrl || null);
+            if (data.user.avatarUrl) {
+              try {
+                localStorage.setItem("edge-user-avatar", data.user.avatarUrl);
+              } catch {}
+            }
+            if (data.user.theme) {
+              setTheme(data.user.theme as Theme);
+              applyTheme(data.user.theme as Theme);
+            } else {
+              setTheme(getStoredTheme());
+            }
           }
+        } else {
+          toast.error("Failed to load profile settings.");
         }
       } catch (err) {
         console.error("Failed to load settings profile", err);
+        toast.error("Network error: Unable to load profile. Please check your connection.");
       } finally {
         if (alive) setLoading(false);
       }
@@ -77,12 +98,23 @@ export default function SettingsView() {
   function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image (PNG, JPEG, or WebP).");
+      return;
+    }
 
     setUploadingAvatar(true);
     const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error("Failed to read the selected image file.");
+      setUploadingAvatar(false);
+    };
     reader.onload = (event) => {
       const img = new Image();
+      img.onerror = () => {
+        toast.error("Failed to process image.");
+        setUploadingAvatar(false);
+      };
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const maxDim = 256;
@@ -106,28 +138,59 @@ export default function SettingsView() {
         const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
         setAvatarUrl(dataUrl);
         setUploadingAvatar(false);
+        toast.info("Profile photo updated. Click 'Save changes' to apply.", { duration: 3000 });
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   }
 
-  async function handleSaveProfile(e: React.FormEvent) {
-    e.preventDefault();
+  function handleSelectTheme(t: Theme) {
+    setTheme(t);
+    applyTheme(t);
+  }
+
+  async function handleSaveProfile(e?: React.FormEvent) {
+    if (e) e.preventDefault();
     setSaving(true);
-    setSaveSuccess(false);
     try {
       const res = await fetch("/api/settings/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl }),
+        body: JSON.stringify({ displayName, timezone, preferredMarkets, avatarUrl, theme }),
       });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
       if (res.ok) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        toast.success("Profile preferences saved successfully.");
+        if (avatarUrl) {
+          try {
+            localStorage.setItem("edge-user-avatar", avatarUrl);
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem("edge-user-avatar");
+          } catch {}
+        }
+        // Notify sidebar & application frame to update avatar & display name immediately
+        window.dispatchEvent(
+          new CustomEvent("edge:profile-updated", {
+            detail: { displayName, avatarUrl },
+          })
+        );
+      } else {
+        const d = await res.json().catch(() => ({}));
+        if (d.error === "Not authenticated") {
+          handleSessionExpired();
+          return;
+        }
+        toast.error(d.error || "Failed to update profile settings.");
       }
     } catch (err) {
       console.error("Failed to update profile", err);
+      toast.error("Network error: Unable to reach the server. Please check your internet connection.");
     } finally {
       setSaving(false);
     }
@@ -137,6 +200,38 @@ export default function SettingsView() {
     setPreferredMarkets((prev) =>
       prev.includes(marketId) ? prev.filter((m) => m !== marketId) : [...prev, marketId]
     );
+  }
+
+  const [exporting, setExporting] = useState(false);
+
+  async function handleDownloadExport() {
+    setExporting(true);
+    toast.info("Preparing data export...", { duration: 2000 });
+    try {
+      const res = await fetch("/api/settings/export");
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      if (!res.ok) {
+        throw new Error("Export failed with status " + res.status);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `edge-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Data export downloaded successfully.");
+    } catch (err) {
+      console.error("Export failed", err);
+      toast.error("Network error: Could not download export. Please check your internet connection.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function handleDeleteAccount() {
@@ -149,15 +244,24 @@ export default function SettingsView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: deleteConfirmation }),
       });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
       if (res.ok) {
+        toast.success("Account deleted successfully.");
         router.push("/");
         router.refresh();
       } else {
-        const d = await res.json();
-        setDeleteError(d.error || "Failed to delete account");
+        const d = await res.json().catch(() => ({}));
+        const msg = d.error || "Failed to delete account";
+        setDeleteError(msg);
+        toast.error(msg);
       }
-    } catch (err) {
-      setDeleteError("Network error deleting account");
+    } catch {
+      const msg = "Network error: Unable to reach server. Please check your internet connection.";
+      setDeleteError(msg);
+      toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -204,14 +308,9 @@ export default function SettingsView() {
                 </p>
               </div>
               <div className="flex items-center gap-3 self-end sm:self-auto">
-                {saveSuccess && (
-                  <span className="flex items-center gap-1 text-xs font-medium text-pass">
-                    <IconCheck className="h-3.5 w-3.5" /> Saved
-                  </span>
-                )}
                 <button
                   type="button"
-                  onClick={handleSaveProfile}
+                  onClick={() => handleSaveProfile()}
                   disabled={saving}
                   className="btn btn-main btn-sm text-xs px-4"
                 >
@@ -290,7 +389,10 @@ export default function SettingsView() {
                       {avatarUrl && (
                         <button
                           type="button"
-                          onClick={() => setAvatarUrl(null)}
+                          onClick={() => {
+                            setAvatarUrl(null);
+                            toast.info("Profile photo cleared. Click 'Save changes' to apply.", { duration: 3000 });
+                          }}
                           className="mt-0.5 w-fit text-[11px] font-medium text-fail hover:underline"
                         >
                           Remove photo
@@ -363,10 +465,69 @@ export default function SettingsView() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-line pt-4">
-                  <span className="text-xs text-pass">
-                    {saveSuccess && "✓ Preferences saved successfully"}
-                  </span>
+                {/* Interface Theme */}
+                <div>
+                  <label className="block text-xs font-medium text-ink">Interface Theme</label>
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    Choose how Edge looks across charts and workspaces. You can also quickly toggle anytime using the sun/moon button in the top header.
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {[
+                      {
+                        id: "dark" as const,
+                        title: "Dark mode",
+                        desc: "Deep blacks and forest green for focused trading",
+                        icon: <IconMoon className="h-4 w-4 text-accent" />,
+                      },
+                      {
+                        id: "light" as const,
+                        title: "Light mode",
+                        desc: "Clean high-contrast theme for daytime sessions",
+                        icon: <IconSun className="h-4 w-4 text-amber-500" />,
+                      },
+                      {
+                        id: "system" as const,
+                        title: "System default",
+                        desc: "Automatically adapts to device appearance",
+                        icon: (
+                          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}>
+                            <rect x="2" y="3" width="20" height="14" rx="2" />
+                            <path d="M8 21h8M12 17v4" />
+                          </svg>
+                        ),
+                      },
+                    ].map((opt) => {
+                      const selected = theme === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSelectTheme(opt.id)}
+                          className={`flex flex-col items-start gap-2 rounded-xl border p-3.5 text-left transition ${
+                            selected
+                              ? "border-accent bg-accent/10 ring-1 ring-accent"
+                              : "border-line bg-surface/50 hover:border-line hover:bg-surface"
+                          }`}
+                        >
+                          <div className="flex w-full items-center justify-between">
+                            <span className="flex items-center gap-2 text-xs font-semibold text-ink">
+                              {opt.icon}
+                              {opt.title}
+                            </span>
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                selected ? "bg-accent ring-2 ring-accent/30" : "bg-line"
+                              }`}
+                            />
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-muted">{opt.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end border-t border-line pt-4">
                   <button type="submit" disabled={saving} className="btn btn-main btn-sm text-xs px-4">
                     {saving ? "Saving..." : "Save changes"}
                   </button>
@@ -452,14 +613,15 @@ export default function SettingsView() {
               </div>
 
               <div className="pt-2">
-                <a
-                  href="/api/settings/export"
-                  download
+                <button
+                  type="button"
+                  onClick={handleDownloadExport}
+                  disabled={exporting}
                   className="btn btn-main btn-sm inline-flex items-center gap-2 text-xs"
                 >
                   <IconGear className="h-3.5 w-3.5" />
-                  Download Full JSON Export
-                </a>
+                  {exporting ? "Preparing export..." : "Download Full JSON Export"}
+                </button>
               </div>
             </div>
           </section>

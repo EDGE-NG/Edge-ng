@@ -58,7 +58,16 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         setBusy("");
         return;
       }
-      router.push("/checklist");
+      let destination = "/checklist";
+      try {
+        const search = new URLSearchParams(window.location.search);
+        const from = search.get("from");
+        const url = new URL(from ?? "/checklist", window.location.origin);
+        if (url.origin === window.location.origin) destination = url.pathname + url.search;
+      } catch {
+        /* fallback to /checklist */
+      }
+      router.push(destination);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Try again.");

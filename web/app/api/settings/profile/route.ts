@@ -61,6 +61,7 @@ export async function PATCH(req: Request) {
     timezone?: unknown;
     preferredMarkets?: unknown;
     avatarUrl?: unknown;
+    theme?: unknown;
   };
 
   let validatedDisplayName: string | null = null;
@@ -77,6 +78,15 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: "Invalid timezone." }, { status: 400 });
     }
     validatedTimezone = body.timezone.trim();
+  }
+
+  let validatedTheme: string | null = null;
+  if (body.theme !== undefined) {
+    if (body.theme === "light" || body.theme === "dark" || body.theme === "system") {
+      validatedTheme = body.theme;
+    } else {
+      return NextResponse.json({ error: "Theme must be 'light', 'dark', or 'system'." }, { status: 400 });
+    }
   }
 
   let validatedMarkets: string[] | null = null;
@@ -133,12 +143,14 @@ export async function PATCH(req: Request) {
      SET display_name = COALESCE(?, display_name),
          timezone = COALESCE(?, timezone),
          preferred_markets = COALESCE(?, preferred_markets),
+         theme = COALESCE(?, theme),
          settings = ?,
          updated_at = now()
      WHERE user_id = ?`,
     validatedDisplayName,
     validatedTimezone,
     validatedMarkets,
+    validatedTheme,
     currSettings,
     user.id
   );

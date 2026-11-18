@@ -1,0 +1,72 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Toaster as SonnerToaster, toast } from "sonner";
+
+export function Toaster() {
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+  useEffect(() => {
+    function updateTheme() {
+      const t = document.documentElement.getAttribute("data-theme");
+      setTheme(t === "light" ? "light" : "dark");
+    }
+    updateTheme();
+
+    const observer = new MutationObserver(() => updateTheme());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    window.addEventListener("edge:theme-changed", updateTheme);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("edge:theme-changed", updateTheme);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleOnline() {
+      toast.success("Connection restored. You are back online.", {
+        id: "network-status",
+        duration: 3500,
+      });
+    }
+
+    function handleOffline() {
+      toast.error("You are offline. Please check your internet connection.", {
+        id: "network-status",
+        duration: 8000,
+      });
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      handleOffline();
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  return (
+    <SonnerToaster
+      position="top-right"
+      theme={theme}
+      richColors
+      closeButton
+      toastOptions={{
+        style: {
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-line)",
+          color: "var(--color-ink)",
+          fontFamily: "var(--font-sans)",
+        },
+      }}
+    />
+  );
+}
+
+export { toast };

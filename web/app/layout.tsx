@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
+import { Toaster } from "./_components/toaster";
 
 export const metadata: Metadata = {
   title: "Edge – Follow the trading rules you set",
@@ -12,8 +13,12 @@ export const metadata: Metadata = {
 const THEME_SCRIPT = `
 try {
   var t = localStorage.getItem("edge-theme");
-  if (t !== "light" && t !== "dark") t = "dark";
-  document.documentElement.setAttribute("data-theme", t);
+  if (t !== "light" && t !== "dark" && t !== "system") t = "dark";
+  var resolved = t;
+  if (t === "system") {
+    resolved = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  document.documentElement.setAttribute("data-theme", resolved);
   var m = localStorage.getItem("edge-motion");
   document.documentElement.setAttribute("data-motion", m === "reduce" ? "reduce" : "full");
 } catch (e) {
@@ -34,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen">
+        <Toaster />
         {children}
         <Script
           id="edge-theme-init"
