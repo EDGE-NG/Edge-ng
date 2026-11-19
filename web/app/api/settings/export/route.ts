@@ -62,6 +62,16 @@ export async function GET() {
     user.id
   );
 
+  const monitors = await db.all(
+    `SELECT id, checklist_id, instrument, timeframe, status, last_state, last_checked_at, last_alert_at, created_at
+     FROM checklist_monitors WHERE user_id = ? ORDER BY created_at`,
+    user.id
+  );
+  const alertEvents = await db.all(
+    "SELECT * FROM alert_events WHERE user_id = ? ORDER BY created_at DESC",
+    user.id
+  );
+
   const exportData = {
     exportedAt: new Date().toISOString(),
     account: {
@@ -94,6 +104,14 @@ export async function GET() {
       rules_overridden: json(o.rules_overridden, []),
     })),
     journalEntries: journal,
+    alerts: {
+      monitors,
+      events: alertEvents.map((e) => ({
+        ...e,
+        summary: json((e as Record<string, unknown>).summary, null),
+        deliveries: json((e as Record<string, unknown>).deliveries, {}),
+      })),
+    },
   };
 
   const filename = `edge-export-${new Date().toISOString().slice(0, 10)}.json`;

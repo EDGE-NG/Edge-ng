@@ -46,7 +46,8 @@ const SESSION_COLS = `id, user_id, checklist_id AS edge_id, checklist_version_id
 export async function getSession(id: string, userId: string): Promise<SessionRow | null> {
   return (
     (await db.one<SessionRow>(
-      `SELECT ${SESSION_COLS} FROM workspace_sessions WHERE id = ? AND user_id = ? AND ended_at IS NULL`,
+      `SELECT ${SESSION_COLS} FROM workspace_sessions
+       WHERE id = ? AND user_id = ? AND ended_at IS NULL AND kind = 'trade'`,
       id,
       userId
     )) ?? null
@@ -58,7 +59,7 @@ export async function openSession(userId: string): Promise<SessionRow | null> {
   return (
     (await db.one<SessionRow>(
       `SELECT ${SESSION_COLS} FROM workspace_sessions
-       WHERE user_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`,
+       WHERE user_id = ? AND ended_at IS NULL AND kind = 'trade' ORDER BY started_at DESC LIMIT 1`,
       userId
     )) ?? null
   );
@@ -147,8 +148,12 @@ export async function startSession(userId: string, edgeId: string, instrument: s
   const id = uuid();
   const rules = await loadItems(edge.active_version_id);
   await db.tx(async (t) => {
-    // one open session per trader: a new instrument starts fresh (EC: instrument changed)
-    await t.run("UPDATE workspace_sessions SET ended_at = now() WHERE user_id = ? AND ended_at IS NULL", userId);
+    // one open session per trader: a new instrument starts fresh (EC: instrument changed).
+    // Background alert monitors keep their own 'monitor' sessions.
+    await t.run(
+      "UPDATE workspace_sessions SET ended_at = now() WHERE user_id = ? AND ended_at IS NULL AND kind = 'trade'",
+      userId
+    );
     await t.run(
       `INSERT INTO workspace_sessions (id, user_id, checklist_id, checklist_version_id, instrument, asset_class, platform, risk_params)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -182,6 +187,8 @@ export async function processFrame(
     force?: boolean;
     /** Reuse the last frame on this timeframe only if it is younger than this. */
     maxReuseMs?: number;
+    /** Check only these rules (alert monitors check one timeframe's rules at a time). */
+    ruleFilter?: (rule: Rule) => boolean;
   }
 ): Promise<{ frameId: string; dataAge: number; reused: boolean }> {
   const inst = findInstrument(s.instrument)!;
@@ -227,6 +234,7 @@ export async function processFrame(
   // only the chart rules this timeframe can answer; the rest keep their last result
   const targets = rules.filter((r) => {
     if (ruleMode(r, risk) !== "chart") return false;
+    if (args.ruleFilter && !args.ruleFilter(r)) return false;
     const need = normalizeTimeframe(r.required_timeframe);
     return !need || need === args.timeframe;
   });

@@ -25,6 +25,10 @@ Rules enforced by the database itself:
 
 Additive only (nothing dropped or renamed), for the web app moving off its temporary SQLite file: profile settings, chat message kinds and payloads, Edge's structured image readings, the candles behind each chart frame, ticket fields (account size, risk amount and percent), the decision's reference price, "placed" as a Phase 1 outcome, and "transcribe" as an AI job. It also lets an overridden decision be marked placed or cancelled, and lets a trader override a "needs evidence" decision as well as a denial (PRD F6: when Edge can't check, the trader can still proceed and it's recorded).
 
+## What `0003_checklist_alerts.sql` adds (draft by Daniel, for Sheyi to review)
+
+Checklist alerts: `checklist_monitors` (markets a trader asked Edge to watch with a checklist), `alert_events` (each time the chart rules started passing; append-only except `read_at` and `deliveries`), `push_subscriptions` (browser and phone devices for Web Push), and `workspace_sessions.kind` (`trade` or `monitor`), so a monitor's background checks keep the same audit trail without touching the trader's own workspace session. **Apply it before deploying the web code that uses it**: the workspace now filters sessions by `kind`.
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.
