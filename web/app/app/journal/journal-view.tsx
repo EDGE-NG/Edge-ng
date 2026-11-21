@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppFrame from "../../_components/app-frame";
 import { IconBook, IconCheck, IconRetry, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
+import MonthReview from "./month-review";
 import { handleSessionExpired } from "@/lib/client-auth";
 
 interface OverrideInfo {
@@ -192,6 +193,8 @@ export default function JournalView() {
             ))}
           </div>
         </div>
+
+        <MonthReview />
 
         {/* Loading state */}
         {loading && (
