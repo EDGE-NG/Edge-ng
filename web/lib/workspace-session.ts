@@ -15,12 +15,14 @@ import { prepareForModel } from "./model-images";
 import {
   CHECK_STALE_MS,
   checkChartRule,
+  evaluateSessionRule,
   FRAME_MAX_AGE_MS,
   latestChecks,
   normalizeTimeframe,
   parseRiskParams,
   ruleMode,
   saveCheck,
+  ticketKey,
   type Check,
   type RiskParams,
   type RuleState,
@@ -71,25 +73,42 @@ export async function sessionRules(s: SessionRow): Promise<{ rules: Rule[]; risk
 }
 
 /**
- * Rule states for the panel / gate. Code rules need a ticket (else "unchecked").
+ * Rule states for the panel / gate. Code rules need a ticket (else "unchecked");
+ * session rules are checked from the clock right now.
  * `freshAfter` (epoch ms) is the gate's stricter cut-off: a chart check made
  * before it is stale and counts as unchecked (REQ-LLM-5). Without it, the
- * panel's display window applies.
+ * panel's display window applies. With `ticketKey`, a chart check made for a
+ * different ticket (side, stop, target) is stale too.
+ * The trader's own answers count for CHECK_STALE_MS.
  */
 export async function ruleStates(
   s: SessionRow,
   codeChecks?: Map<string, Check>,
-  opts: { freshAfter?: number } = {}
+  opts: { freshAfter?: number; ticketKey?: string } = {}
 ): Promise<RuleState[]> {
   const { rules, risk } = await sessionRules(s);
   const latest = await latestChecks(s.id);
   const cutoff = opts.freshAfter ?? Date.now() - CHECK_STALE_MS;
+  const answerCutoff = Date.now() - CHECK_STALE_MS;
+  const at = new Date();
   return rules.map((rule) => {
     const mode = ruleMode(rule, risk);
-    const check = mode === "code" ? codeChecks?.get(rule.item_key!) ?? null : latest.get(rule.item_key!) ?? null;
-    const stale = Boolean(check && mode === "chart" && Date.parse(check.checkedAt) < cutoff);
+    const check =
+      mode === "code"
+        ? codeChecks?.get(rule.item_key!) ?? null
+        : mode === "session"
+          ? evaluateSessionRule(rule, s.asset_class, at)
+          : latest.get(rule.item_key!) ?? null;
+    let stale = false;
+    if (check && mode === "chart") {
+      stale =
+        Date.parse(check.checkedAt) < cutoff ||
+        (opts.ticketKey !== undefined && (check.evidence?.ticketKey ?? "none") !== opts.ticketKey);
+    }
+    if (check && mode === "trader") stale = Date.parse(check.checkedAt) < answerCutoff;
     let status: RuleState["status"] = check ? check.result : "unchecked";
-    if (mode === "trader" && check?.result !== "pass") status = "unchecked";
+    // a trader rule is Yes (pass), No (fail) or not answered yet
+    if (mode === "trader" && check?.result === "inconclusive") status = "unchecked";
     if (stale) status = "unchecked";
     return { rule, mode, check, status, stale };
   });
@@ -179,17 +198,34 @@ export async function processFrame(
     visibleFrom?: number;
     visibleTo?: number;
     ticket?: Ticket | null;
+    /** The ticket's entry is a pending / limit price (part of what the model saw). */
+    pending?: boolean;
     force?: boolean;
     /** Reuse the last frame on this timeframe only if it is younger than this. */
     maxReuseMs?: number;
+    /**
+     * Reuse within the same candle even if its price moved (the gate and the
+     * warm-up: REQ-LLM-5 is about the check's age). Otherwise the price must
+     * match exactly.
+     */
+    sameCandleOk?: boolean;
   }
 ): Promise<{ frameId: string; dataAge: number; reused: boolean }> {
   const inst = findInstrument(s.instrument)!;
   const candles = await getCandles(inst, args.timeframe, 300);
   const last = candles[candles.length - 1];
   const { rules, risk, indicators } = await sessionRules(s);
+  const tKey = ticketKey(args.ticket, args.pending);
 
-  // skip unchanged frames (PRD 5.7 cost control)
+  // only the chart rules this timeframe can answer; the rest keep their last result
+  const targets = rules.filter((r) => {
+    if (ruleMode(r, risk) !== "chart") return false;
+    const need = normalizeTimeframe(r.required_timeframe);
+    return !need || need === args.timeframe;
+  });
+
+  // skip unchanged frames (PRD 5.7 cost control), but only when the last
+  // checks were made for this same ticket
   const prev = await db.one<{ id: string; captured_at: string; candles: unknown }>(
     `SELECT id, captured_at, candles FROM chart_frames
      WHERE session_id = ? AND timeframe = ? ORDER BY captured_at DESC LIMIT 1`,
@@ -198,8 +234,10 @@ export async function processFrame(
   );
   if (!args.force && prev && Date.now() - Date.parse(prev.captured_at) < (args.maxReuseMs ?? 60_000)) {
     const prevLast = json<Array<{ time: number; close: number }>>(prev.candles, []).at(-1);
-    if (prevLast && prevLast.time === last.time && prevLast.close === last.close) {
-      return { frameId: prev.id, dataAge: dataAgeSeconds(candles, args.timeframe), reused: true };
+    if (prevLast && prevLast.time === last.time && (args.sameCandleOk || prevLast.close === last.close)) {
+      const latest = await latestChecks(s.id);
+      const sameTicket = targets.every((r) => (latest.get(r.item_key!)?.evidence?.ticketKey ?? "none") === tKey);
+      if (sameTicket) return { frameId: prev.id, dataAge: dataAgeSeconds(candles, args.timeframe), reused: true };
     }
   }
 
@@ -224,12 +262,6 @@ export async function processFrame(
     last.time
   );
 
-  // only the chart rules this timeframe can answer; the rest keep their last result
-  const targets = rules.filter((r) => {
-    if (ruleMode(r, risk) !== "chart") return false;
-    const need = normalizeTimeframe(r.required_timeframe);
-    return !need || need === args.timeframe;
-  });
   // downscale the live frame once for all rule checks (REQ-LLM-9); the stored
   // original above is kept for the audit snapshot
   const modelImage = args.image ? await prepareForModel(args.image, "image/png") : null;
@@ -244,51 +276,68 @@ export async function processFrame(
       })
     )
   );
+  // remember which ticket each check was made for (see ticketKey)
+  for (const c of checks) c.evidence = { ...(c.evidence ?? {}), ticketKey: tKey };
   await Promise.all(checks.map((c, i) => saveCheck(s, c, targets[i].hard_gate, "vision")));
   return { frameId, dataAge: dataAgeSeconds(candles, args.timeframe), reused: false };
 }
 
 /** A little under the cut-off, so a reused frame's checks are never already stale. */
 const GATE_REUSE_MS = FRAME_MAX_AGE_MS - 3_000;
+/**
+ * The warm-up re-checks anything older than this, so that at the press of
+ * Buy / Sell the checks are still inside GATE_REUSE_MS and the gate answers
+ * in about a second instead of waiting for the model (decision, Daniel,
+ * 2026-11-21). The page warms up every ~20 s while the trader is working on
+ * a trade.
+ */
+export const WARM_REUSE_MS = 15_000;
 
 /**
- * Fresh checks at the press of Buy / Sell (PRD 5.5 step 8, REQ-LLM-5).
+ * Fresh checks at the press of Buy / Sell (PRD 5.5 step 8, REQ-LLM-5), and
+ * the same refresh ahead of time while the trader fills in the ticket.
  *
  * The view on screen is checked from its captured frame. Every hard-gate
  * chart rule that needs a different timeframe, and has no check younger than
- * FRAME_MAX_AGE_MS, is re-checked from the server's own candles for that
- * timeframe (source B), so the trader does not have to click through each
- * timeframe again. A timeframe whose data cannot be loaded leaves its rules
- * unchecked, which the roll-up turns into Needs evidence, never an approval.
+ * FRAME_MAX_AGE_MS for this ticket, is re-checked from the server's own
+ * candles for that timeframe (source B), so the trader does not have to click
+ * through each timeframe again. A timeframe whose data cannot be loaded
+ * leaves its rules unchecked, which the roll-up turns into Needs evidence,
+ * never an approval.
  *
  * Returns the cut-off the roll-up must use, and any timeframes that failed.
  */
 export async function refreshForGate(
   s: SessionRow,
-  args: { timeframe: Timeframe; image: Buffer | null; ticket: Ticket }
+  args: { timeframe: Timeframe; image: Buffer | null; ticket: Ticket | null; pending?: boolean; reuseMs?: number }
 ): Promise<{ freshAfter: number; failed: Array<{ timeframe: string; message: string }> }> {
   const freshAfter = Date.now() - FRAME_MAX_AGE_MS;
+  const reuseMs = args.reuseMs ?? GATE_REUSE_MS;
+  const tKey = ticketKey(args.ticket, args.pending);
+  const frameArgs = { ticket: args.ticket, pending: args.pending, maxReuseMs: reuseMs, sameCandleOk: true };
 
   // 1. the view on screen (errors here are the caller's "cannot check")
-  await processFrame(s, { timeframe: args.timeframe, image: args.image, ticket: args.ticket, maxReuseMs: GATE_REUSE_MS });
+  await processFrame(s, { timeframe: args.timeframe, image: args.image, ...frameArgs });
 
-  // 2. hard-gate chart rules on other timeframes whose last check is too old
+  // 2. hard-gate chart rules on other timeframes whose last check is too old,
+  //    or was made for a different ticket
   const { rules, risk } = await sessionRules(s);
   const latest = await latestChecks(s.id);
   const needed = new Set<Timeframe>();
+  const reuseAfter = Date.now() - reuseMs;
   for (const r of rules) {
     if (!r.hard_gate || ruleMode(r, risk) !== "chart") continue;
     const tf = normalizeTimeframe(r.required_timeframe);
     if (!tf || tf === args.timeframe) continue;
     const last = latest.get(r.item_key!);
-    if (!last || Date.parse(last.checkedAt) < freshAfter) needed.add(tf);
+    if (!last || Date.parse(last.checkedAt) < reuseAfter || (last.evidence?.ticketKey ?? "none") !== tKey) needed.add(tf);
   }
 
   const failed: Array<{ timeframe: string; message: string }> = [];
   await Promise.all(
     [...needed].map(async (tf) => {
       try {
-        await processFrame(s, { timeframe: tf, image: null, ticket: args.ticket, maxReuseMs: GATE_REUSE_MS });
+        await processFrame(s, { timeframe: tf, image: null, ...frameArgs });
       } catch (err) {
         if (!(err instanceof MarketError)) console.error(`[gate] ${tf} re-check failed:`, err);
         failed.push({
@@ -301,8 +350,11 @@ export async function refreshForGate(
   return { freshAfter, failed };
 }
 
-/** Trader confirmation for rules only they can confirm (EC-P6). */
-export async function confirmByTrader(s: SessionRow, itemKey: string, confirmed: boolean): Promise<boolean> {
+/**
+ * The trader's answer for a rule only they can judge (EC-P6): "yes" (met),
+ * "no" (not met: a hard gate then fails) or "clear" (unanswered again).
+ */
+export async function confirmByTrader(s: SessionRow, itemKey: string, answer: "yes" | "no" | "clear"): Promise<boolean> {
   const { rules, risk } = await sessionRules(s);
   const rule = rules.find((r) => r.item_key === itemKey);
   if (!rule || ruleMode(rule, risk) !== "trader") return false;
@@ -310,11 +362,11 @@ export async function confirmByTrader(s: SessionRow, itemKey: string, confirmed:
     s,
     {
       itemKey,
-      result: confirmed ? "pass" : "inconclusive",
+      result: answer === "yes" ? "pass" : answer === "no" ? "fail" : "inconclusive",
       observed: "",
-      reasoning: confirmed ? "You confirmed this." : "Not confirmed yet.",
+      reasoning: answer === "yes" ? "You confirmed this is met." : answer === "no" ? "You said this isn't met." : "Not answered yet.",
       confidence: null,
-      missing: confirmed ? null : "your confirmation",
+      missing: answer === "clear" ? "your answer" : null,
       source: "trader",
       timeframe: null,
       frameId: null,

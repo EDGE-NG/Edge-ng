@@ -4,7 +4,9 @@
  * The LLM perceives and explains; code decides (PRD 5.7):
  *  - "code" rules (max risk %, min risk-to-reward, max trades per day) are
  *    parsed from the trader's own wording and evaluated from the ticket.
- *  - "trader" rules (manual / needs outside context) are ticked by the trader.
+ *  - "session" rules ("Entry during the London session") are checked from the
+ *    clock against public session hours (lib/sessions.ts); no model call.
+ *  - "trader" rules (manual / needs outside context) are answered by the trader.
  *  - "chart" rules are compared by the LLM against the captured frame, the
  *    real candles and the rule's confirmed evidence images. Cited prices are
  *    cross-checked against the candles; ungrounded claims make the rule
@@ -20,6 +22,7 @@ import type { Rule } from "./edge-builder";
 import { activeImages, readFile, type EvidenceImage } from "./evidence";
 import { computeIndicator, indicatorLabel, type Candle, type IndicatorSpec, type Timeframe } from "./market";
 import { cachedForModel, toDataUrl, type ModelImage } from "./model-images";
+import { checkSessionRule, sessionsInRule } from "./sessions";
 
 export const APPROVAL_SECONDS = 60; // REQ-GT-3
 /**
@@ -36,7 +39,7 @@ export const CHECK_PROMPT_VERSION = "rule_check/v2";
 const CANDLES_FOR_MODEL = 80;
 
 export type Result = "pass" | "fail" | "inconclusive";
-export type RuleMode = "chart" | "code" | "trader";
+export type RuleMode = "chart" | "code" | "session" | "trader";
 
 /* ----------------------------------------------------------- risk rules -- */
 
@@ -81,7 +84,30 @@ export function ruleMode(rule: Rule, risk: RiskParams): RuleMode {
   if (k && (risk.maxRiskPct?.itemKey === k || risk.minRR?.itemKey === k || risk.maxTradesPerDay?.itemKey === k)) {
     return "code";
   }
-  return rule.assessability === "chart" ? "chart" : "trader";
+  if (rule.assessability === "chart") return "chart";
+  // A time rule the trader would otherwise confirm by hand: Edge knows the
+  // session from the clock. Chart rules that merely mention a session
+  // ("London session high") stay chart rules.
+  if (sessionsInRule(rule.text)) return "session";
+  return "trader";
+}
+
+/** A session rule checked now (see lib/sessions.ts). */
+export function evaluateSessionRule(rule: Rule, assetClass: string, at = new Date()): Check {
+  const r = checkSessionRule(rule.text, at, assetClass);
+  return {
+    itemKey: rule.item_key!,
+    result: r ? (r.pass ? "pass" : "fail") : "inconclusive",
+    observed: "",
+    reasoning: r?.reason ?? "Edge couldn't tell which session this rule means.",
+    confidence: r ? "high" : null,
+    missing: null,
+    source: "code",
+    timeframe: null,
+    frameId: null,
+    evidence: null,
+    checkedAt: at.toISOString(),
+  };
 }
 
 /** "4H", "4 hour", "15 min", "daily" -> Edge timeframe. */
@@ -117,6 +143,18 @@ export interface Ticket {
   riskAmount: number | null;
 }
 
+/**
+ * What a chart check knew about the ticket. The model sees the side, stop,
+ * target and (for pending / limit orders) the entry, so a check is only
+ * reused at the gate for the same values. Market-order entries follow the
+ * live price and are left out.
+ */
+export function ticketKey(t: Ticket | null | undefined, pendingEntry = false): string {
+  if (!t) return "none";
+  const n = (v: number | null) => (v == null ? "" : String(+v.toPrecision(10)));
+  return [t.side, n(t.stop), n(t.target), pendingEntry ? n(t.entry) : ""].join("|");
+}
+
 export function ticketMath(t: Ticket) {
   const riskPerUnit = t.stop != null ? Math.abs(t.entry - t.stop) : null;
   const rewardPerUnit = t.target != null ? Math.abs(t.target - t.entry) : null;
@@ -138,7 +176,7 @@ export interface Check {
   source: "llm" | "code" | "trader";
   timeframe: string | null;
   frameId: string | null;
-  evidence: { candleRange?: [number, number]; referenceImageIds?: string[] } | null;
+  evidence: { candleRange?: [number, number]; referenceImageIds?: string[]; ticketKey?: string } | null;
   checkedAt: string;
   /** For LLM checks: the model, and the llm_runs row that holds the prompt version (REQ-GT-5). */
   model?: string | null;
@@ -491,6 +529,7 @@ export async function latestChecks(sessionId: string): Promise<Map<string, Check
       timeframe?: string | null;
       candleRange?: [number, number];
       referenceImageIds?: string[];
+      ticketKey?: string;
     };
     const observed = json<{ text?: string } | null>(r.observed_facts, null);
     out.set(String(r.item_key), {
@@ -503,7 +542,7 @@ export async function latestChecks(sessionId: string): Promise<Map<string, Check
       source: r.source as Check["source"],
       timeframe: ev.timeframe ?? null,
       frameId: (r.frame_id as string) ?? null,
-      evidence: { candleRange: ev.candleRange, referenceImageIds: ev.referenceImageIds },
+      evidence: { candleRange: ev.candleRange, referenceImageIds: ev.referenceImageIds, ticketKey: ev.ticketKey },
       checkedAt: String(r.checked_at),
       // carried into the gate decision snapshot (REQ-GT-5)
       model: (r.model as string) ?? null,
@@ -545,6 +584,7 @@ export function rollUp(states: RuleState[]): {
 /** Plain-language reason per rule for the decision card (PR-GT-2, PR-GT-8). */
 export function reasonFor(s: RuleState): string {
   // stale is checked first: a stale rule is also "unchecked"
+  if (s.stale && s.mode === "trader") return "Your answer is over 15 minutes old. Answer it again.";
   if (s.stale) {
     return s.rule.required_timeframe
       ? `The last check is too old. Show the ${s.rule.required_timeframe} chart again.`
