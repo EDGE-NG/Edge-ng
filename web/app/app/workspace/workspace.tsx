@@ -22,7 +22,7 @@ import { EdgeTicket, MtTicket, SpotTicket, ticketStyle } from "./tickets";
 import { TF_LABEL, TIMEFRAMES, type Instrument, type TicketDraft, type Timeframe, type View } from "./types";
 
 const ASSET_LABEL = { crypto: "Crypto", forex: "Forex", metals: "Metals", indices: "Indices" } as const;
-const PLATFORMS = ["MetaTrader 5", "MetaTrader 4", "cTrader", "TradingView", "Binance", "Bybit", "Other"];
+const PLATFORMS = ["MetaTrader 5", "MetaTrader 4", "cTrader", "TradeLocker", "Match-Trader", "Binance", "Bybit", "OKX", "TradingView", "Other"];
 const DEFAULT_SYMBOL = "EUR/USD";
 const DEFAULT_PLATFORM = "MetaTrader 5";
 

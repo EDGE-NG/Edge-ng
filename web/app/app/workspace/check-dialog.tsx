@@ -279,6 +279,53 @@ export default function CheckDialog({
 
 /* ------------------------------------------------------------ outcome ---- */
 
+/** What the trader's platform reported for an order Edge sent (broker connections, next step). */
+interface Execution {
+  status: "placed" | "rejected";
+  platform: string;
+  orderId: string | null;
+  summary?: string | null;
+}
+
+/**
+ * After "Place this trade". When the platform confirms the order, the trader
+ * sees it named: "Your trade has been placed on your MT5 / Binance / ...".
+ * Until accounts can be connected no order is sent, so Edge says what really
+ * happened (the trade is recorded) instead of claiming a placed order.
+ */
+function Placed({ approved, platform, execution }: { approved: boolean; platform: string; execution: Execution | null }) {
+  const placedOnPlatform = execution?.status === "placed";
+  const box = approved ? "border-accent/45 bg-pass-bg" : "border-maybe/45 bg-warn-bg";
+  const tone = approved ? "text-accent" : "text-maybe";
+  const seal = approved ? "bg-accent" : "bg-maybe";
+  return (
+    <div className={`grid gap-1.5 rounded-[14px] border p-4 ${box}`} role="status">
+      <p className={`flex items-center gap-2.5 text-base font-semibold ${tone}`}>
+        <span className={`grid h-7 w-7 place-items-center rounded-full text-bg ${seal}`} aria-hidden>
+          <Tick className="h-3.5 w-3.5" />
+        </span>
+        {approved ? "Your checklist has all passed" : "Override recorded"}
+      </p>
+      {placedOnPlatform ? (
+        <>
+          <p className="text-[13px] leading-relaxed text-ink/85">
+            Your trade has been placed on your {platform}.{approved ? "" : " It's in your journal as an override."}
+          </p>
+          <p className="text-xs text-muted tabular-nums">
+            {execution?.summary ? `${execution.summary} · ` : ""}
+            {execution?.orderId ? `Order #${execution.orderId}` : ""}
+          </p>
+        </>
+      ) : (
+        <p className="text-[13px] leading-relaxed text-ink/85">
+          Your trade is recorded in your journal{approved ? "" : " as an override"}. Edge places it on your {platform || "platform"} once your
+          account is connected.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Outcome({
   decision,
   platform,
@@ -297,6 +344,7 @@ function Outcome({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [allowance, setAllowance] = useState<OverrideAllowance | null>(decision.overrides ?? null);
+  const [execution, setExecution] = useState<Execution | null>(null);
   const noOverridesLeft = allowance != null && allowance.left === 0;
 
   useEffect(() => {
@@ -316,6 +364,7 @@ function Outcome({
       });
       const d = await res.json().catch(() => ({}));
       if (d.overrides) setAllowance(d.overrides);
+      if (d.execution) setExecution(d.execution as Execution);
       if (!res.ok) {
         setMsg(d.error || "Couldn't save that.");
         if (d.code === "expired" || d.code === "price_moved") setResolution("expired");
@@ -394,12 +443,7 @@ function Outcome({
 
       <div className="mt-4">
         {resolution === "placed" ? (
-          <p className={`flex items-center gap-2.5 text-sm ${decision.result === "approved" ? "text-accent" : "text-maybe"}`}>
-            <span className={`grid h-[26px] w-[26px] place-items-center rounded-full text-bg ${decision.result === "approved" ? "bg-accent" : "bg-maybe"}`} aria-hidden>
-              <Tick className="h-3.5 w-3.5" />
-            </span>
-            {decision.result === "approved" ? "Trade recorded. It's in your journal." : "Trade recorded in your journal as an override."}
-          </p>
+          <Placed approved={decision.result === "approved"} platform={execution?.platform || platform} execution={execution} />
         ) : resolution === "accepted_denial" ? (
           <p className="text-sm text-ink/80">Not taken. That decision is recorded in your journal.</p>
         ) : resolution === "cancelled" ? (
@@ -410,9 +454,6 @@ function Outcome({
               <button className={main} disabled={busy} onClick={() => act("placed")}>Place this trade</button>
               <button className={btn} disabled={busy} onClick={() => act("cancel")}>Don&apos;t trade</button>
             </div>
-            <p className="text-xs text-muted">
-              Edge records the trade in your journal. Sending it straight to {platform || "your platform"} comes once you can connect your account.
-            </p>
           </div>
         ) : resolution === "overridden" ? (
           <div className="space-y-2">

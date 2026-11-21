@@ -226,7 +226,99 @@ export function MtTicket({ inst, risk, lastPrice, disabled, onDraft, onSubmit, p
   );
 }
 
-/* -------------------------------------------------------- Binance style --- */
+/* ------------------------------------------------ exchange spot style --- */
+
+/**
+ * Exchange spot order form (Binance / Bybit / OKX). It keeps the exchange's
+ * own dark look whatever Edge's theme, so traders find everything where they
+ * expect it: Buy/Sell, Limit / Market / Stop Limit, Price, Amount, the
+ * diamond-marked % slider, Total, TP/SL, Avbl, Max Buy and Est. Fee.
+ */
+const BX = {
+  bg: "#181a20",
+  field: "#2b3139",
+  line: "#474d57",
+  ink: "#eaecef",
+  muted: "#848e9c",
+  yellow: "#fcd535",
+  green: "#2ebd85",
+  red: "#f6465d",
+};
+const TAKER_FEE = 0.001; // shown as an estimate only
+
+function BxField({
+  label,
+  unit,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  unit: string;
+  value: string;
+  onChange?: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className="flex h-10 items-center gap-2 rounded-lg border px-3 text-sm transition-colors focus-within:border-[#fcd535]"
+      style={disabled ? { background: BX.field, borderColor: "transparent" } : { borderColor: BX.line }}
+    >
+      <span className="shrink-0 text-[13px]" style={{ color: BX.muted }}>{label}</span>
+      <input
+        className="h-full min-w-0 flex-1 bg-transparent text-right tabular-nums outline-none placeholder:text-[#848e9c]"
+        style={{ color: disabled ? BX.muted : BX.ink }}
+        inputMode="decimal"
+        autoComplete="off"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange?.(e.target.value)}
+        aria-label={`${label} in ${unit}`}
+      />
+      <span className="shrink-0 text-[13px]" style={{ color: BX.muted }}>{unit}</span>
+    </label>
+  );
+}
+
+/** The exchange's % slider: a thin rail with diamond marks at 0 / 25 / 50 / 75 / 100. */
+function BxSlider({ pct, onChange, label }: { pct: number; onChange: (p: number) => void; label: string }) {
+  return (
+    <div>
+      <div className="relative mx-1.5 mt-0.5 h-[18px]">
+        <span className="absolute inset-x-0 top-2 h-0.5" style={{ background: BX.line }} />
+        <span className="absolute left-0 top-2 h-0.5" style={{ background: BX.ink, width: `${pct}%` }} />
+        {[0, 25, 50, 75, 100].map((m) => (
+          <span
+            key={m}
+            className="absolute top-[5px] -ml-1 h-2 w-2 rotate-45 rounded-[1px] border-2"
+            style={{ left: `${m}%`, borderColor: pct >= m ? BX.ink : BX.line, background: pct >= m ? BX.ink : BX.bg }}
+          />
+        ))}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={pct}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="peer absolute inset-0 m-0 w-full cursor-pointer opacity-0"
+          aria-label={label}
+        />
+        <span
+          className="pointer-events-none absolute top-[3px] -ml-1.5 h-3 w-3 rotate-45 rounded-[2px] border-[3px] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[#fcd535]"
+          style={{ left: `${pct}%`, borderColor: BX.ink, background: BX.bg }}
+        />
+      </div>
+      <div className="mt-0.5 flex justify-between text-[11px]" style={{ color: BX.muted }} aria-hidden>
+        <span>0%</span>
+        <span>25%</span>
+        <span>50%</span>
+        <span>75%</span>
+        <span>100%</span>
+      </div>
+    </div>
+  );
+}
 
 type BnType = "limit" | "market" | "stop_limit";
 
@@ -249,7 +341,8 @@ export function SpotTicket({ inst, risk, lastPrice, disabled, onDraft, onSubmit,
   const target = tpsl ? num(tp) : null;
   const total = qty != null && entry != null ? qty * entry : null;
   const riskAmount = qty != null && entry != null && stop != null ? qty * Math.abs(entry - stop) : null;
-  const pct = total != null && available ? Math.min(100, Math.round((total / available) * 100)) : 0;
+  const pct = total != null && available ? Math.max(0, Math.min(100, Math.round((total / available) * 100))) : 0;
+  const amountDp = inst.decimals >= 3 ? 2 : 5;
 
   const draft = useMemo<TicketDraft>(
     () => ({
@@ -269,139 +362,134 @@ export function SpotTicket({ inst, risk, lastPrice, disabled, onDraft, onSubmit,
 
   const fromSlider = (p: number) => {
     if (!available || !entry) return;
-    setAmount(((available * p) / 100 / entry).toFixed(inst.decimals >= 3 ? 2 : 5));
+    setAmount(((available * p) / 100 / entry).toFixed(amountDp));
   };
   const submit = () => {
     store(ACCOUNT_KEY, avbl);
     onSubmit(side, draft);
   };
-  const box = "flex h-10 items-center gap-2 rounded-xl border border-line bg-input-bg px-3 text-xs text-muted";
-  const boxInput = "h-full min-w-0 flex-1 bg-transparent text-right text-sm text-ink tabular-nums outline-none disabled:text-muted";
-  const green = "#0ecb81";
-  const red = "#f6465d";
+  const types: Array<[BnType, string]> = [
+    ["limit", "Limit"],
+    ["market", "Market"],
+    ["stop_limit", "Stop Limit"],
+  ];
+  const row = "flex justify-between text-xs";
 
   return (
-    <section className="card p-0" aria-label="Trade ticket">
-      <Head title="Spot" platform={platform} />
-      <div className="grid gap-3 px-4 py-3.5">
-        <div className="grid grid-cols-2 rounded-lg bg-panel p-[3px]" role="group" aria-label="Side">
+    <section
+      className="overflow-hidden rounded-2xl border"
+      style={{ background: BX.bg, color: BX.ink, borderColor: BX.field }}
+      aria-label="Trade ticket"
+    >
+      <div className="flex items-center gap-[18px] border-b px-4 pt-3 text-sm" style={{ borderColor: BX.field }}>
+        <span className="pb-2.5 font-semibold" style={{ boxShadow: `inset 0 -2px 0 ${BX.yellow}` }}>Spot</span>
+        <span className="ml-auto flex items-center gap-2 pb-2.5 text-xs" style={{ color: BX.muted }}>
+          {platform}
+          <span className="rounded-full border border-dashed px-2 py-0.5 text-[11px]" style={{ borderColor: BX.line }}>
+            Connect account: coming next
+          </span>
+        </span>
+      </div>
+
+      <div className="grid gap-3 px-4 pt-3.5 pb-1">
+        <div className="grid grid-cols-2 rounded-lg p-0.5" style={{ background: BX.field }} role="group" aria-label="Side">
           {(["buy", "sell"] as const).map((s) => (
             <button
               key={s}
               type="button"
               aria-pressed={side === s}
               onClick={() => setSide(s)}
-              className="h-[34px] rounded-md font-semibold transition"
-              style={side === s ? { background: s === "buy" ? green : red, color: s === "buy" ? "#04110a" : "#fff" } : { color: "var(--color-muted)" }}
+              className="h-[34px] rounded-md text-sm font-semibold transition-colors"
+              style={side === s ? { background: s === "buy" ? BX.green : BX.red, color: "#fff" } : { color: BX.muted }}
             >
               {s === "buy" ? "Buy" : "Sell"}
             </button>
           ))}
         </div>
-        <div className="flex gap-4 border-b border-line text-[13px]" role="tablist" aria-label="Order type">
-          {(
-            [
-              ["limit", "Limit"],
-              ["market", "Market"],
-              ["stop_limit", "Stop Limit"],
-            ] as const
-          ).map(([k, label]) => (
+
+        <div className="flex gap-[18px] text-sm" role="tablist" aria-label="Order type">
+          {types.map(([k, label]) => (
             <button
               key={k}
               type="button"
               role="tab"
               aria-selected={type === k}
               onClick={() => setType(k)}
-              className={`-mb-px border-b-2 pt-1.5 pb-2 ${type === k ? "border-[#f0b90b] font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
+              className={`py-0.5 ${type === k ? "font-semibold" : ""}`}
+              style={{ color: type === k ? BX.ink : BX.muted }}
             >
               {label}
             </button>
           ))}
         </div>
-        <label className={box}>
-          <span>Avbl</span>
-          <input className={boxInput} inputMode="decimal" value={avbl} placeholder="0.00" onChange={(e) => setAvbl(e.target.value)} aria-label={`Available ${quoteAsset}`} />
-          <span>{quoteAsset}</span>
-        </label>
-        {type === "stop_limit" && (
-          <label className={box}>
-            <span>Stop</span>
-            <input className={boxInput} inputMode="decimal" value={trigger} onChange={(e) => setTrigger(e.target.value)} aria-label={`Stop price in ${quoteAsset}`} />
-            <span>{quoteAsset}</span>
-          </label>
+
+        {type === "stop_limit" && <BxField label="Stop" unit={quoteAsset} value={trigger} onChange={setTrigger} />}
+        {type === "market" ? (
+          <BxField label="Price" unit={quoteAsset} value="Market Price" disabled />
+        ) : (
+          <BxField label={type === "stop_limit" ? "Limit" : "Price"} unit={quoteAsset} value={price} onChange={setPrice} />
         )}
-        <label className={box}>
-          <span>{type === "stop_limit" ? "Limit" : "Price"}</span>
+        <BxField label="Amount" unit={baseAsset} value={amount} onChange={setAmount} />
+        <BxSlider pct={pct} onChange={fromSlider} label={`Share of available ${quoteAsset}`} />
+        <BxField label="Total" unit={quoteAsset} value={total != null ? fmt(total, 2) : ""} disabled />
+
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
           <input
-            className={boxInput}
-            inputMode="decimal"
-            disabled={type === "market"}
-            value={type === "market" ? "Market price" : price}
-            placeholder={lastPrice != null ? lastPrice.toFixed(inst.decimals) : ""}
-            onChange={(e) => setPrice(e.target.value)}
-            aria-label={`Price in ${quoteAsset}`}
+            type="checkbox"
+            checked={tpsl}
+            onChange={(e) => setTpsl(e.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer accent-[#fcd535]"
           />
-          <span>{quoteAsset}</span>
-        </label>
-        <label className={box}>
-          <span>Amount</span>
-          <input className={boxInput} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label={`Amount in ${baseAsset}`} />
-          <span>{baseAsset}</span>
-        </label>
-        <div className="grid gap-1">
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={pct}
-            onChange={(e) => fromSlider(Number(e.target.value))}
-            className="w-full accent-[#f0b90b]"
-            aria-label={`Share of available ${quoteAsset}`}
-          />
-          <div className="flex justify-between text-[11px] text-muted">
-            <span>0%</span>
-            <span>25%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span>100%</span>
-          </div>
-        </div>
-        <div className={box}>
-          <span>Total</span>
-          <input className={boxInput} disabled value={total != null ? fmt(total, 2) : ""} aria-label={`Total in ${quoteAsset}`} />
-          <span>{quoteAsset}</span>
-        </div>
-        <label className="flex items-center gap-2 text-[13px]">
-          <input type="checkbox" checked={tpsl} onChange={(e) => setTpsl(e.target.checked)} className="h-[15px] w-[15px] accent-[#f0b90b]" />
           TP/SL
         </label>
         {tpsl && (
-          <div className="grid grid-cols-2 gap-2.5">
-            <label className={box}>
-              <span>TP</span>
-              <input className={boxInput} inputMode="decimal" value={tp} onChange={(e) => setTp(e.target.value)} aria-label="Take profit" />
-            </label>
-            <label className={box}>
-              <span>SL{risk.stopRequired ? "*" : ""}</span>
-              <input className={boxInput} inputMode="decimal" value={sl} onChange={(e) => setSl(e.target.value)} aria-label={`Stop loss${risk.stopRequired ? " (required)" : ""}`} />
-            </label>
-          </div>
+          <>
+            <BxField label="Take Profit" unit={quoteAsset} value={tp} onChange={setTp} />
+            <BxField label={risk.stopRequired ? "Stop Loss (required)" : "Stop Loss"} unit={quoteAsset} value={sl} onChange={setSl} />
+          </>
         )}
+
+        <label className={`${row} items-center`} style={{ color: BX.muted }}>
+          <span>Avbl</span>
+          <span className="flex items-center gap-1" style={{ color: BX.ink }}>
+            <input
+              className="w-24 bg-transparent text-right tabular-nums outline-none placeholder:text-[#848e9c]"
+              inputMode="decimal"
+              value={avbl}
+              placeholder="0.00"
+              onChange={(e) => setAvbl(e.target.value)}
+              aria-label={`Available ${quoteAsset}`}
+            />
+            {quoteAsset}
+          </span>
+        </label>
+        <div className={row} style={{ color: BX.muted }}>
+          <span>{side === "buy" ? "Max Buy" : "Max Sell"}</span>
+          <b className="font-medium tabular-nums" style={{ color: BX.ink }}>
+            {available && entry ? `${(available / entry).toFixed(amountDp)} ${baseAsset}` : "–"}
+          </b>
+        </div>
+        <div className={row} style={{ color: BX.muted }}>
+          <span>Est. Fee</span>
+          <b className="font-medium tabular-nums" style={{ color: BX.ink }}>{total != null ? `${fmt(total * TAKER_FEE, 2)} ${quoteAsset}` : "–"}</b>
+        </div>
       </div>
-      <EdgeLine riskAmount={riskAmount} accountSize={available} rr={rrOf(entry, stop, target)} risk={risk} ccy={quoteAsset} />
-      <div className="px-4 pt-3.5 pb-3">
+
+      <div className="mt-2">
+        <EdgeLine riskAmount={riskAmount} accountSize={available} rr={rrOf(entry, stop, target)} risk={risk} ccy={quoteAsset} />
+      </div>
+      <div className="px-4 pt-3 pb-3">
         <button
           type="button"
           disabled={disabled}
           onClick={submit}
-          className="h-[46px] w-full rounded-lg text-[15px] font-semibold transition hover:brightness-110 disabled:opacity-50"
-          style={{ background: side === "buy" ? green : red, color: side === "buy" ? "#04110a" : "#fff" }}
+          className="h-[42px] w-full rounded-lg text-[15px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+          style={{ background: side === "buy" ? BX.green : BX.red }}
         >
           {side === "buy" ? "Buy" : "Sell"} {baseAsset}
         </button>
       </div>
-      {fine}
+      <p className="px-4 pb-4 text-xs" style={{ color: BX.muted }}>Edge checks your trade against your checklist before it goes anywhere.</p>
     </section>
   );
 }
@@ -486,7 +574,8 @@ export function EdgeTicket({ inst, risk, lastPrice, disabled, onDraft, onSubmit 
 
 /** Which ticket a platform gets. */
 export function ticketStyle(platform: string): "mt" | "spot" | "edge" {
-  if (/^MetaTrader/.test(platform)) return "mt";
-  if (platform === "Binance" || platform === "Bybit") return "spot";
+  // MT5-style New Order window: MetaTrader and the forex platforms that work in lots
+  if (/^MetaTrader/.test(platform) || ["cTrader", "TradeLocker", "Match-Trader"].includes(platform)) return "mt";
+  if (platform === "Binance" || platform === "Bybit" || platform === "OKX") return "spot";
   return "edge";
 }
