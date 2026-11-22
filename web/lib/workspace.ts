@@ -22,7 +22,7 @@ import type { Rule } from "./edge-builder";
 import { activeImages, readFile, type EvidenceImage } from "./evidence";
 import { computeIndicator, indicatorLabel, type Candle, type IndicatorSpec, type Timeframe } from "./market";
 import { cachedForModel, toDataUrl, type ModelImage } from "./model-images";
-import { checkSessionRule, sessionsInRule } from "./sessions";
+import { checkSessionRule, isPlainSessionRule } from "./sessions";
 
 export const APPROVAL_SECONDS = 60; // REQ-GT-3
 /**
@@ -88,7 +88,7 @@ export function ruleMode(rule: Rule, risk: RiskParams): RuleMode {
   // A time rule the trader would otherwise confirm by hand: Edge knows the
   // session from the clock. Chart rules that merely mention a session
   // ("London session high") stay chart rules.
-  if (sessionsInRule(rule.text)) return "session";
+  if (isPlainSessionRule(rule.text)) return "session";
   return "trader";
 }
 

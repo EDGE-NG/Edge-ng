@@ -111,11 +111,34 @@ export function sessionsInRule(text: string): { keys: SessionKey[]; overlap: boo
 }
 
 /**
+ * Words that change what a session rule means: a negation ("never during the
+ * Asian session", "avoid London"), or a narrower window ("first hour of
+ * London", "after the New York open", "before 10:00"). Edge only knows when a
+ * whole session is open, so a rule with any of these is not checked from the
+ * clock; the trader answers it instead (a failure is never a pass, REQ-GT-7).
+ */
+const SESSION_QUALIFIERS =
+  /\b(not|no|never|don'?t|do not|avoid|avoiding|outside|except|excluding|unless|skip|stop|before|after|until|till|first|last|early|late|hours?|minutes?|mins?|between|opening|close[sd]?|closing|kill ?zones?|highs?|lows?|range|sweep|swept|liquidity|levels?|price|candles?|weekends?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|n't\b|\d/;
+
+/**
+ * True only for a plain "during the X session" rule (or "the London / New
+ * York overlap") that the clock can answer exactly. See SESSION_QUALIFIERS.
+ */
+export function isPlainSessionRule(text: string): boolean {
+  const t = text.toLowerCase();
+  if (!/\bsessions?\b|\boverlap\b/.test(t)) return false;
+  if (SESSION_QUALIFIERS.test(t)) return false;
+  return sessionsInRule(t) !== null;
+}
+
+/**
  * Pass when the named session is open now (or, for "overlap", when London and
  * New York are both open; for several sessions, when any is open). Plain-
  * language reason for the trader either way (PR-GT-2).
  */
 export function checkSessionRule(text: string, date: Date, assetClass: string): { pass: boolean; reason: string } | null {
+  // only plain session rules; anything else is Inconclusive, never a guessed pass
+  if (!isPlainSessionRule(text)) return null;
   const found = sessionsInRule(text);
   if (!found) return null;
   if (weekendClosed(date, assetClass)) {
