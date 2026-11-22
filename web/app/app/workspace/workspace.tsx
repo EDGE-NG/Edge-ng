@@ -18,7 +18,7 @@ import ChartView, { type Candle, type ChartHandle, type IndicatorSeries } from "
 import CheckDialog from "./check-dialog";
 import RulesPanel from "./rules-panel";
 import SessionStrip from "./session-strip";
-import { EdgeTicket, MtTicket, SpotTicket, ticketStyle } from "./tickets";
+import { EdgeTicket, isSpot, MtTicket, SpotTicket, ticketKind, TileTicket } from "./tickets";
 import { TF_LABEL, TIMEFRAMES, type Instrument, type TicketDraft, type Timeframe, type View } from "./types";
 
 const ASSET_LABEL = { crypto: "Crypto", forex: "Forex", metals: "Metals", indices: "Indices" } as const;
@@ -69,7 +69,7 @@ export default function Workspace() {
   const instruments = useMemo(() => boot?.instruments ?? [], [boot]);
   const inst = instruments.find((i) => i.symbol === symbol) ?? null;
   const sessionId = view?.session.id ?? null;
-  const style = ticketStyle(platform);
+  const kind = ticketKind(platform);
 
   // what the chart shows: only data for the current instrument + timeframe
   const current = market && market.key === `${symbol}|${tf}` ? market : null;
@@ -265,7 +265,7 @@ export default function Workspace() {
   function choosePlatform(p: string) {
     setPlatform(p);
     // Binance / Bybit tickets trade crypto
-    if (ticketStyle(p) === "spot" && inst?.assetClass !== "crypto") {
+    if (isSpot(ticketKind(p)) && inst?.assetClass !== "crypto") {
       setAssetClass("crypto");
       setSymbol("BTCUSDT");
     }
@@ -425,7 +425,7 @@ export default function Workspace() {
                   <RulesPanel view={view} tf={tf} checking={checking} warming={warming} onShowTf={setTf} onAnswer={answerRule} onRecheck={runCheck} />
                 )}
                 {view && inst && (
-                  style === "spot" && inst.assetClass !== "crypto" ? (
+                  isSpot(kind) && inst.assetClass !== "crypto" ? (
                     <section className="card p-5 text-sm" aria-label="Trade ticket">
                       <p className="text-ink/85">{platform} trades crypto. Pick a crypto pair, or choose the platform you trade {inst.label} on.</p>
                       <button
@@ -439,10 +439,12 @@ export default function Workspace() {
                         Switch to BTC/USDT
                       </button>
                     </section>
-                  ) : style === "mt" ? (
-                    <MtTicket key={`${platform}-${inst.symbol}`} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
-                  ) : style === "spot" ? (
-                    <SpotTicket key={`${platform}-${inst.symbol}`} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
+                  ) : kind === "mt5" || kind === "mt4" ? (
+                    <MtTicket key={`${platform}-${inst.symbol}`} variant={kind} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
+                  ) : kind === "ctrader" || kind === "tradelocker" || kind === "matchtrader" ? (
+                    <TileTicket key={`${platform}-${inst.symbol}`} variant={kind} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
+                  ) : isSpot(kind) ? (
+                    <SpotTicket key={`${platform}-${inst.symbol}`} variant={kind as "binance" | "bybit" | "okx"} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
                   ) : (
                     <EdgeTicket key={`${platform}-${inst.symbol}`} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
                   )
