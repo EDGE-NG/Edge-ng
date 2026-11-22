@@ -68,7 +68,13 @@ create index alert_events_user_created on public.alert_events (user_id, created_
 create or replace function public.guard_alert_event()
 returns trigger language plpgsql as $$
 begin
-  if (to_jsonb(new) - 'read_at' - 'deliveries') is distinct from (to_jsonb(old) - 'read_at' - 'deliveries') then
+  -- monitor_id and session_id may only go to null: that is "on delete set
+  -- null" running when the trader removes a monitor or a session is purged.
+  -- The alert itself (what was seen, when, for which checklist) never changes.
+  if (to_jsonb(new) - 'read_at' - 'deliveries' - 'monitor_id' - 'session_id')
+       is distinct from (to_jsonb(old) - 'read_at' - 'deliveries' - 'monitor_id' - 'session_id')
+     or (new.monitor_id is not null and new.monitor_id is distinct from old.monitor_id)
+     or (new.session_id is not null and new.session_id is distinct from old.session_id) then
     raise exception 'alert events are append-only; only read_at and deliveries can be set'
       using errcode = 'check_violation';
   end if;
