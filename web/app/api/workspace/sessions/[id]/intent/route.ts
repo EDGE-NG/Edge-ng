@@ -8,6 +8,7 @@ import {
   reasonFor,
   rollUp,
   ruleMode,
+  ticketKey,
   ticketMath,
   type Check,
   type Ticket,
@@ -22,8 +23,12 @@ function num(v: unknown): number | null {
   return v === null || v === undefined || v === "" || !Number.isFinite(n) ? null : n;
 }
 
+const ORDER_TYPES = ["market", "pending", "limit", "stop_limit"] as const;
+
 /**
- * POST { side, entry, stop?, target?, accountSize?, riskAmount?, timeframe, image?, idempotencyKey }
+ * POST { side, entry, stop?, target?, accountSize?, riskAmount?, timeframe, image?, idempotencyKey,
+ *        orderType?, size?, sizeUnit? }
+ * (orderType / size / sizeUnit come from the platform-style ticket and are kept in the snapshot.)
  * -> the trader pressed Buy or Sell (PR-GT-1). Edge re-checks with a fresh
  * frame and the current price, evaluates risk rules in code, and returns
  * Approved / Denied / Needs evidence (PR-GT-2, REQ-GT-1). Decisions are
@@ -64,6 +69,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const tf = b.timeframe as Timeframe;
   if (!TIMEFRAMES.includes(tf)) return NextResponse.json({ error: "Unknown timeframe." }, { status: 400 });
+  const orderType = (ORDER_TYPES as readonly string[]).includes(String(b.orderType)) ? String(b.orderType) : "market";
+  const pending = orderType !== "market";
+  const order = {
+    type: orderType,
+    size: num(b.size),
+    sizeUnit: typeof b.sizeUnit === "string" ? b.sizeUnit.slice(0, 12) : null,
+    platform: typeof b.platform === "string" && b.platform ? b.platform.slice(0, 40) : s.platform,
+  };
 
   const inst = findInstrument(s.instrument)!;
   // fresh frame + current price at the press of the button (PRD 5.5 step 8).
@@ -77,7 +90,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       typeof b.image === "string" && b.image.startsWith("data:image/png;base64,")
         ? Buffer.from(b.image.slice(22), "base64")
         : null;
-    const refreshed = await refreshForGate(s, { timeframe: tf, image, ticket });
+    const refreshed = await refreshForGate(s, { timeframe: tf, image, ticket, pending });
     freshAfter = refreshed.freshAfter;
     if (refreshed.failed.length) {
       cannotCheck = refreshed.failed.map((f) => `${f.timeframe}: ${f.message}`).join(" ");
@@ -97,7 +110,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   for (const r of rules) {
     if (ruleMode(r, risk) === "code") codeChecks.set(r.item_key!, evaluateRiskRule(r, risk, ticket, today));
   }
-  const states = await ruleStates(s, codeChecks, { freshAfter });
+  const states = await ruleStates(s, codeChecks, { freshAfter, ticketKey: ticketKey(ticket, pending) });
   const roll = rollUp(states);
   const m = ticketMath(ticket);
 
@@ -158,6 +171,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         reasons,
         {
           ticket,
+          order,
           timeframe: tf,
           lastPrice,
           risk,
@@ -186,6 +200,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({ decisionId, ...(await decisionView(decisionId)) }, { status: 201 });
 }
 
+/** Each rule's result in this decision, in checklist order, for the check popup. */
+function ruleResults(snapshot: unknown): Array<{ itemKey: string; status: string; reason: string }> {
+  const snap = json<{ rules?: Array<{ rule?: { item_key?: string }; mode?: string; status?: string; check?: { reasoning?: string; missing?: string | null } | null }> }>(snapshot, {});
+  return (snap.rules ?? []).map((r) => ({
+    itemKey: String(r.rule?.item_key ?? ""),
+    status: String(r.status ?? "unchecked"),
+    reason: r.check?.reasoning || (r.check?.missing ? `Edge still needs ${r.check.missing}.` : ""),
+  }));
+}
+
 async function decisionView(decisionId: string) {
   const d = (await db.one<Record<string, unknown>>(
     `SELECT d.*, i.side, i.entry_price, i.stop_price, i.target_price, i.risk_pct, i.risk_reward, i.instrument
@@ -195,6 +219,7 @@ async function decisionView(decisionId: string) {
   return {
     result: d.result as "approved" | "denied" | "needs_evidence",
     reasons: json(d.reasons, {}),
+    rules: ruleResults(d.snapshot),
     validUntil: d.valid_until as string | null,
     referencePrice: d.reference_price as number,
     resolution: (d.resolution as string) ?? null,
