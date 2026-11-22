@@ -28,6 +28,11 @@ export interface OverrideAllowance {
  */
 const WEEK_START_LOCAL = `(date_trunc('week', (now() AT TIME ZONE '${MARKET_TZ}') + interval '6 hours') - interval '6 hours')`;
 
+/** SQL expression: the instant the current market week started. The dashboard's "this week" uses it too. */
+export const MARKET_WEEK_START_SQL = `(${WEEK_START_LOCAL} AT TIME ZONE '${MARKET_TZ}')`;
+/** The previous market week's start, also on New York wall-clock time so DST changes can't shift it by an hour. */
+export const PREV_MARKET_WEEK_START_SQL = `((${WEEK_START_LOCAL} - interval '7 days') AT TIME ZONE '${MARKET_TZ}')`;
+
 export async function overrideAllowance(userId: string, q: Db = db): Promise<OverrideAllowance> {
   const row = (await q.one<{ used: number; resets_at: string }>(
     `SELECT
