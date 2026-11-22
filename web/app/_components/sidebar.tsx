@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import EdgeMark from "./edge-mark";
 import {
+  IconBell,
   IconBook,
   IconCandles,
   IconChecklist,
@@ -23,7 +24,7 @@ import {
   IconX,
 } from "./icons";
 
-export type Section = "dashboard" | "workspace" | "journal" | "checklist" | "evidence" | "settings";
+export type Section = "dashboard" | "workspace" | "alerts" | "journal" | "checklist" | "evidence" | "settings";
 
 interface NavItem {
   key: Section;
@@ -35,6 +36,7 @@ interface NavItem {
 const PRIMARY_NAV: NavItem[] = [
   { key: "dashboard", href: "/app", label: "Dashboard", Icon: IconGauge },
   { key: "workspace", href: "/app/workspace", label: "Trade workspace", Icon: IconCandles },
+  { key: "alerts", href: "/app/alerts", label: "Alerts", Icon: IconBell },
   { key: "journal", href: "/app/journal", label: "Journal", Icon: IconBook },
 ];
 

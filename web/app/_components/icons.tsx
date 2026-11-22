@@ -78,6 +78,13 @@ export const IconGauge = ({ className = "h-[18px] w-[18px]" }: P) => (
     <rect x="3.5" y="15.5" width="7" height="5" rx="1.8" />
   </svg>
 );
+/** Alerts: a bell. */
+export const IconBell = ({ className = "h-[18px] w-[18px]" }: P) => (
+  <svg {...base} className={className}>
+    <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
+    <path d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+  </svg>
+);
 export const IconMenu = ({ className = "h-5 w-5" }: P) => (
   <svg {...base} className={className}>
     <path d="M4 7h16M4 12h16M4 17h10" />
