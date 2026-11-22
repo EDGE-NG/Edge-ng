@@ -26,7 +26,7 @@ import { loadItems, type Rule } from "./edge-builder";
 import { activeImages } from "./evidence";
 import { dataAgeSeconds, findInstrument, getCandles, MarketError, type Timeframe } from "./market";
 import { appUrl, notifyUser } from "./notify";
-import { latestChecks, normalizeTimeframe, parseRiskParams, ruleMode, type Result, type RiskParams } from "./workspace";
+import { evaluateSessionRule, latestChecks, normalizeTimeframe, parseRiskParams, ruleMode, type Result, type RiskParams } from "./workspace";
 import { processFrame, type SessionRow } from "./workspace-session";
 
 /** Instruments one trader can watch at once (AI and market-data cost). */
@@ -100,6 +100,8 @@ export interface WatchPlan {
   watched: Rule[];
   traderRules: Rule[];
   riskRules: Rule[];
+  /** Hard-gate session rules ("during the London session"), checked from the clock. */
+  sessionRules: Rule[];
   tfOf: (r: Rule) => Timeframe;
   /** Timeframes to check, highest first. */
   timeframes: Timeframe[];
@@ -115,6 +117,7 @@ export function watchPlan(rules: Rule[], risk: RiskParams, baseTf: Timeframe): W
     watched,
     traderRules: rules.filter((r) => r.hard_gate && ruleMode(r, risk) === "trader"),
     riskRules: rules.filter((r) => ruleMode(r, risk) === "code"),
+    sessionRules: rules.filter((r) => r.hard_gate && ruleMode(r, risk) === "session"),
     tfOf,
     timeframes,
   };
@@ -278,12 +281,19 @@ export async function runMonitor(m: MonitorRow, opts: { force?: boolean } = {}):
   let dataProblem = false;
   let lastPrice: number | null = null;
 
+  // session rules first, from the clock (no AI): outside the trader's session
+  // the setup can't pass, so no chart check is spent and no alert is sent
+  const sessionFails = plan.sessionRules
+    .map((r) => evaluateSessionRule(r, m.asset_class))
+    .filter((c) => c.result !== "pass");
+  for (const c of sessionFails) notes.push(c.reasoning);
+
   const failingOn = async (tf: Timeframe) => {
     const latest = await latestChecks(s.id);
     return plan.watched.some((r) => plan.tfOf(r) === tf && latest.get(r.item_key!)?.result === "fail");
   };
 
-  for (const tf of plan.timeframes) {
+  for (const tf of sessionFails.length ? [] : plan.timeframes) {
     const current = periodOf(tf, nowSec);
     if (opts.force || periods[tf] !== current) {
       try {
@@ -335,8 +345,8 @@ export async function runMonitor(m: MonitorRow, opts: { force?: boolean } = {}):
       confirmedExamples: examples.get(r.item_key!) ?? 0,
     };
   });
-  const met = watched.every((w) => w.status === "pass");
-  const anyFail = watched.some((w) => w.status === "fail");
+  const met = sessionFails.length === 0 && watched.every((w) => w.status === "pass");
+  const anyFail = sessionFails.length > 0 || watched.some((w) => w.status === "fail");
   // a data or AI problem with no failing rule leaves the last state as it was
   const state: MonitorRow["last_state"] = met ? "met" : anyFail || !dataProblem ? "not_met" : m.last_state;
 

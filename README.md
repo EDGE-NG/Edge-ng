@@ -2,7 +2,7 @@
 
 **Define your edge. Prove it with charts. Trade only when your plan says yes.**
 
-Edge is a pre-trade discipline tool for traders. A trader writes or speaks their trading plan, Edge turns it into a checklist they approve, the trader teaches each rule with 1 to 6 example chart images, and before every trade Edge checks the chart against those rules and returns **Approved**, **Denied** or **Needs evidence**. The trader can always override, and every decision goes into a journal and dashboard.
+Edge is a pre-trade discipline tool for traders. A trader writes or speaks their trading plan, Edge turns it into a checklist they approve, the trader teaches each rule with 1 to 6 example chart images, and before every trade Edge checks the chart against those rules and returns **Approved**, **Denied** or **Needs evidence**. The trader can override up to 3 times a week, and every decision goes into a journal and dashboard.
 
 Edge gives no signals, makes no predictions and is not financial advice.
 
