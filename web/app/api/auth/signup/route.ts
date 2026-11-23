@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { db, uuid } from "@/lib/db";
 import { PASSWORD_MIN, tooManyAttempts } from "@/lib/auth";
+import { DISCLAIMER_VERSION } from "@/lib/legal";
 import { authClient } from "@/lib/supabase";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** Bump when the disclaimer wording changes; acceptances are stored per version. */
-const DISCLAIMER_VERSION = "2026-11-12";
 
 /**
  * POST { name, email, password, timezone?, acceptDisclaimer } -> create an

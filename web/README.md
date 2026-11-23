@@ -82,6 +82,29 @@ It prints a local API URL, anon key, service role key and database URL to put in
 
 Run from the repo root: `npm run dev:web`.
 
+## Continue with Google
+
+The sign-in and sign-up pages have a **Continue with Google** button (PRD F1), handled by Supabase Auth:
+
+- `app/api/auth/google/route.ts` starts it. The button is only active once the trader has accepted the disclaimer (the sign-up checkbox, or the "By continuing with Google…" line on the sign-in page); a 10-minute `edge_oauth` cookie carries that acceptance and the time zone.
+- `app/auth/callback/route.ts` finishes it: swaps the code for a session, fills in the profile (name from Google) and stores the disclaimer acceptance for a new account. Google has verified the email, so there's no confirmation email.
+- A Google account with the same email as an existing password account signs in to that same account.
+
+**Setup (once, by the Supabase owner).** No new settings in `web/.env.local` or Vercel are needed.
+
+1. **Google Cloud Console** (console.cloud.google.com), in a project for Edge:
+   - **APIs & Services → OAuth consent screen**: app name `Edge`, support email, then publish it (External).
+   - **Credentials → Create credentials → OAuth client ID → Web application**:
+     - **Authorized JavaScript origins:** `https://edge-ng.vercel.app`, `http://localhost:3000`
+     - **Authorized redirect URIs:** `https://<project-ref>.supabase.co/auth/v1/callback` (shown in Supabase on the Google provider page)
+   - Copy the **Client ID** and **Client secret**.
+2. **Supabase → Authentication → Sign In / Providers → Google**: enable it and paste the Client ID and secret.
+3. **Supabase → Authentication → URL Configuration**:
+   - **Site URL:** `https://edge-ng.vercel.app`
+   - **Redirect URLs:** add `https://edge-ng.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`.
+
+Locally, Google is off by default (`supabase/config.toml`); email sign-up works without it.
+
 ## Checklist alerts
 
 The trader picks markets (e.g. Gold, Nasdaq 100) for Edge to watch with an approved checklist (`/app/alerts`). On each new candle the server checks the checklist's hard-gate chart rules from its own price data, with the same rule check as the workspace (`lib/alerts.ts`). When they all pass, Edge stores an alert and sends a browser/phone notification and an email. An alert is not an approval: the trader checks the trade in the workspace and the gate decides. Tables: `supabase/migrations/0003_checklist_alerts.sql`.
