@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar, { MenuButton, useSidebar, type Section } from "./sidebar";
 import { ThemeToggle } from "./theme-toggle";
-import { handleSessionExpired } from "@/lib/client-auth";
+import { handleSessionExpired, signOut } from "@/lib/client-auth";
 
 export default function AppFrame({
   active,
@@ -67,19 +67,9 @@ export default function AppFrame({
     };
   }, []);
 
-  async function signOut() {
-    try {
-      localStorage.removeItem("edge-user-profile");
-      localStorage.removeItem("edge-user-avatar");
-    } catch {}
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
-    router.refresh();
-  }
-
   return (
     <div className="flex h-dvh overflow-hidden">
-      <Sidebar active={active} user={user} open={open} onClose={() => toggle(false)} onSignOut={signOut} />
+      <Sidebar active={active} user={user} open={open} onClose={() => toggle(false)} onSignOut={() => void signOut(router)} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line px-4 sm:px-6">
           <MenuButton open={open} onOpen={() => toggle(true)} />

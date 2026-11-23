@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
-import { IconCheck, IconGear, IconMoon, IconSun, IconTrash, IconX } from "../../_components/icons";
+import { IconCheck, IconGear, IconLogout, IconMoon, IconSun, IconTrash, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
-import { handleSessionExpired } from "@/lib/client-auth";
+import { handleSessionExpired, signOut } from "@/lib/client-auth";
 
 const TIMEZONES = [
   "UTC",
@@ -50,6 +50,7 @@ export default function SettingsView() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -656,6 +657,34 @@ export default function SettingsView() {
             </div>
           </section>
         )}
+
+        {/* Sign out: on every tab, below the tab's content */}
+        <section className="card mt-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8" aria-labelledby="signout-title">
+          <div className="min-w-0">
+            <h3 id="signout-title" className="text-lg font-medium text-ink">Sign out</h3>
+            <p className="mt-1 text-xs text-muted">
+              {email ? (
+                <>
+                  You&apos;re signed in as <span className="break-all text-ink">{email}</span>. Sign out on shared computers when you&apos;re done.
+                </>
+              ) : (
+                "Sign out of Edge on this device."
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              setSigningOut(true);
+              if (!(await signOut(router))) setSigningOut(false);
+            }}
+            disabled={signingOut}
+            className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-md border border-line px-4 py-2 text-sm font-medium text-ink transition hover:bg-panel disabled:opacity-60 sm:self-auto"
+          >
+            <IconLogout className="h-4 w-4" />
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </section>
 
         {/* Delete Confirmation Modal */}
         {showDeleteModal && (
