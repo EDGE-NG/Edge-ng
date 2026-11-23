@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import EdgeMark from "./edge-mark";
+import { toast } from "./toaster";
 
 type Mode = "signin" | "signup";
 
@@ -84,6 +85,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         throw new Error(d.error || "Something went wrong. Try again.");
       }
       // Email confirmation is on: Supabase sent a verification link (PRD F1 step 2).
+      // signing in within the 14 days cancels a scheduled account deletion (PRD F13)
+      if (d.deletionCancelled) toast.success("Welcome back. Your account deletion was cancelled.");
       if (d.needsConfirmation) {
         setNotice(d.message || "Check your email for a confirmation link, then sign in.");
         setBusy("");

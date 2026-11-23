@@ -23,6 +23,20 @@ export function Toaster() {
     };
   }, []);
 
+  // one-off notices passed in the URL by a server redirect, e.g. after Google
+  // sign-in cancels a scheduled account deletion (/auth/callback)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const notice = url.searchParams.get("notice");
+    if (notice === "deletion_cancelled") {
+      toast.success("Welcome back. Your account deletion was cancelled.");
+    }
+    if (notice) {
+      url.searchParams.delete("notice");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  }, []);
+
   useEffect(() => {
     function handleOnline() {
       toast.success("Connection restored. You are back online.", {
