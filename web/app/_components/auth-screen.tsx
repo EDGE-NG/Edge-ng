@@ -6,10 +6,28 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import EdgeMark from "./edge-mark";
 
 type Mode = "signin" | "signup";
+
+/** Messages for ?error= after "Continue with Google" comes back (see /auth/callback). */
+const URL_ERRORS: Record<string, string> = {
+  google: "Google sign-in didn't work. Try again, or use your email and password.",
+  google_cancelled: "Google sign-in was cancelled.",
+  disclaimer: "Tick the box to confirm Edge is decision support, then continue with Google.",
+};
+
+const noSubscribe = () => () => {};
+const readUrlError = () => URL_ERRORS[new URLSearchParams(window.location.search).get("error") ?? ""] ?? "";
+
+/** Start Google sign-in (/api/auth/google), carrying the disclaimer acceptance and time zone. */
+function continueWithGoogle() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // a full page load on purpose: the server route redirects on to Google
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.href = `/api/auth/google?accept=1&tz=${encodeURIComponent(tz)}`;
+}
 
 export default function AuthScreen({ mode }: { mode: Mode }) {
   const router = useRouter();
@@ -22,7 +40,20 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [error, setError] = useState("");
   const [exists, setExists] = useState(false);
   const [notice, setNotice] = useState("");
-  const [busy, setBusy] = useState<"" | "submit">("");
+  const [busy, setBusy] = useState<"" | "submit" | "google">("");
+  // an error passed back in the URL (Google sign-in); empty on the server
+  const urlError = useSyncExternalStore(noSubscribe, readUrlError, () => "");
+  const shownError = error || (notice ? "" : urlError);
+
+  // coming back from Google with the browser's Back button restores the page
+  // as it was ("Opening Google…"); make the buttons usable again
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy("");
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -195,9 +226,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 ✓ {notice}
               </p>
             )}
-            {error && (
+            {shownError && (
               <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3.5 py-2.5 text-sm text-fail">
-                {error}{" "}
+                {shownError}{" "}
                 {exists && (
                   <Link href="/login" className="underline">
                     Sign in
@@ -223,6 +254,32 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </button>
           </form>
 
+          <div className="my-5 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
+
+          <button
+            type="button"
+            className="btn w-full gap-3 border border-line bg-surface text-ink hover:border-accent/50"
+            disabled={busy !== "" || (signup && !accept)}
+            onClick={() => {
+              setBusy("google");
+              continueWithGoogle();
+            }}
+          >
+            <GoogleMark className="h-4.5 w-4.5" />
+            {busy === "google" ? "Opening Google…" : "Continue with Google"}
+          </button>
+          <p className="mt-2 text-center text-xs text-muted">
+            {signup
+              ? accept
+                ? "Google confirms your email, so there's no confirmation link."
+                : "Tick the box above first."
+              : "By continuing with Google, you confirm Edge is decision support, not financial advice."}
+          </p>
+
           <p className="mt-6 text-center text-sm text-muted">
             {signup ? "Already have an account? " : "New to Edge? "}
             <Link href={signup ? "/login" : "/signup"} className="text-ink underline-offset-4 hover:underline">
@@ -238,6 +295,18 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         Edge is decision support, not financial advice. Trading involves risk.
       </p>
     </div>
+  );
+}
+
+/** Google's "G" mark, as Google's sign-in branding guidelines ask for. */
+function GoogleMark({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+    </svg>
   );
 }
 
