@@ -83,3 +83,29 @@ export async function getObject(bucket: Bucket, key: string): Promise<Buffer> {
 export async function removeObject(bucket: Bucket, key: string): Promise<void> {
   await admin().storage.from(bucket).remove([key]);
 }
+
+/** All storage buckets that hold a trader's files. */
+export const USER_BUCKETS: Bucket[] = ["evidence", "frames"];
+
+/**
+ * Delete every file in a trader's folder (`<userId>/...`) of one bucket, for
+ * account deletion (PRD F13). Throws if any listing or removal fails, so the
+ * caller can stop before deleting the account. Returns how many were removed.
+ */
+export async function removeUserFolder(bucket: Bucket, userId: string): Promise<number> {
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new Error("bad user id");
+  const store = admin().storage.from(bucket);
+  let removed = 0;
+  // removing shrinks the listing, so always read the first page again
+  for (;;) {
+    const { data, error } = await store.list(userId, { limit: 100, offset: 0 });
+    if (error) throw new Error(`storage list failed (${bucket}/${userId}): ${error.message}`);
+    const keys = (data ?? []).filter((f) => f.id).map((f) => `${userId}/${f.name}`);
+    if (keys.length === 0) return removed;
+    const { data: gone, error: rmError } = await store.remove(keys);
+    if (rmError) throw new Error(`storage remove failed (${bucket}/${userId}): ${rmError.message}`);
+    // nothing removed means the remaining entries can't be deleted: stop instead of looping
+    if (!gone?.length) throw new Error(`storage remove made no progress (${bucket}/${userId})`);
+    removed += gone.length;
+  }
+}

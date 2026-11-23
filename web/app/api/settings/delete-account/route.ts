@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
+import { GRACE_DAYS, scheduleDeletion } from "@/lib/account-deletion";
 import { getUser } from "@/lib/auth";
-import { db, uuid } from "@/lib/db";
-import { adminClient, authClient } from "@/lib/supabase";
+import { authClient } from "@/lib/supabase";
 
+/**
+ * POST { confirmation: "DELETE" } -> schedule the account for deletion
+ * (PRD F13). Nothing is deleted now: the account is deleted GRACE_DAYS later
+ * by the daily purge (/api/account/purge), files and all. Signing in before
+ * then cancels it (see lib/account-deletion.ts). The trader is signed out on
+ * every device straight away.
+ */
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -12,33 +19,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Type DELETE to confirm account deletion." }, { status: 400 });
   }
 
+  let dueAt: string;
   try {
-    // PRD REQ-GOV: the audit log outlives deleted accounts (kept 24 months, no foreign key on purpose)
-    await db.run(
-      `INSERT INTO audit_log (id, actor_user_id, actor_type, action, object_type, object_id, metadata)
-       VALUES (?, ?, 'trader', 'account.deleted', 'user', ?, ?)`,
-      uuid(),
-      user.id,
-      user.id,
-      { email: user.email, deletedAt: new Date().toISOString() }
-    );
-
-    // Deleting from Supabase Auth cascades deletions in Postgres (ON DELETE CASCADE)
-    const admin = adminClient();
-    const { error } = await admin.auth.admin.deleteUser(user.id);
-    if (error) {
-      console.error("[delete-account] admin delete failed:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    // Sign out from current session
-    const supabase = await authClient();
-    await supabase.auth.signOut();
-
-    return NextResponse.json({ ok: true });
+    dueAt = await scheduleDeletion(user.id, user.email ?? null);
   } catch (err) {
-    console.error("[delete-account] error:", err);
-    return NextResponse.json({ error: "Failed to delete account. Please try again." }, { status: 500 });
+    console.error("[delete-account] could not schedule deletion:", err);
+    return NextResponse.json({ error: "We couldn't delete your account just now. Please try again." }, { status: 500 });
   }
-}
 
+  // sign out everywhere: other devices must not keep using an account that is being deleted
+  try {
+    const supabase = await authClient();
+    await supabase.auth.signOut({ scope: "global" });
+  } catch (err) {
+    console.error("[delete-account] sign-out failed:", err);
+  }
+
+  return NextResponse.json({ ok: true, dueAt, graceDays: GRACE_DAYS });
+}

@@ -250,7 +250,15 @@ export default function SettingsView() {
         return;
       }
       if (res.ok) {
-        toast.success("Account deleted successfully.");
+        const d = (await res.json().catch(() => ({}))) as { dueAt?: string };
+        const when = d.dueAt ? new Date(d.dueAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "in 14 days";
+        try {
+          localStorage.removeItem("edge-user-profile");
+          localStorage.removeItem("edge-user-avatar");
+        } catch {
+          /* storage blocked */
+        }
+        toast.success(`Your account will be deleted on ${when}. Sign in before then to cancel.`, { duration: 10000 });
         router.push("/");
         router.refresh();
       } else {
@@ -636,13 +644,15 @@ export default function SettingsView() {
               <h3 className="text-lg font-medium">Delete Account & Data</h3>
             </div>
             <p className="mt-1 text-xs text-muted">
-              Permanently remove your account and all associated checklists, evidence images, decisions, and journal entries.
+              Remove your account and all its checklists, example charts, decisions and journal entries. You have 14 days to change your mind.
             </p>
 
             <div className="mt-6 rounded-lg border border-fail/20 bg-err-bg/30 p-4 text-xs text-ink/85">
-              <p className="font-semibold text-fail">Warning: This action cannot be undone.</p>
+              <p className="font-semibold text-fail">Your account is deleted 14 days after you confirm.</p>
               <p className="mt-1 text-muted">
-                Once deleted, your account cannot be recovered. In accordance with PRD governance requirements (REQ-GOV), an anonymized deletion receipt is recorded in the immutable audit log for compliance.
+                You&apos;ll be signed out on every device. Sign in again within 14 days to cancel. After that, your account
+                and all its data are deleted for good and can&apos;t be recovered. A short record that the account was
+                deleted (email and date) is kept for security.
               </p>
             </div>
 
@@ -702,7 +712,8 @@ export default function SettingsView() {
               </div>
 
               <p className="mt-3 text-xs text-muted">
-                To confirm permanent deletion of your account and all data, please type <strong className="text-ink">DELETE</strong> below:
+                Your account will be deleted in 14 days unless you sign in again before then. To confirm, type{" "}
+                <strong className="text-ink">DELETE</strong> below:
               </p>
 
               <input
@@ -731,7 +742,7 @@ export default function SettingsView() {
                   onClick={handleDeleteAccount}
                   className="rounded-md bg-fail px-4 py-1.5 text-xs font-semibold text-white transition disabled:opacity-40 hover:bg-fail/90"
                 >
-                  {deleting ? "Deleting..." : "Permanently Delete"}
+                  {deleting ? "Deleting…" : "Delete my account"}
                 </button>
               </div>
             </div>

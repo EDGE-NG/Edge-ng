@@ -87,7 +87,8 @@ export default function TermsPage() {
 
       <Section title="8. Ending">
         <p>
-          You can stop using Edge and delete your account at any time in Settings. We may end your access if you
+          You can stop using Edge and delete your account at any time in Settings. It is deleted 14 days later
+          unless you sign in again before then. We may end your access if you
           break these terms, with notice where reasonable.
         </p>
       </Section>

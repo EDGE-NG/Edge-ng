@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cancelScheduledDeletion } from "@/lib/account-deletion";
 import { cookies } from "next/headers";
 import { db, uuid } from "@/lib/db";
 import { DISCLAIMER_VERSION, OAUTH_COOKIE } from "@/lib/legal";
@@ -75,5 +76,7 @@ export async function GET(req: Request) {
     });
   }
 
-  return NextResponse.redirect(new URL("/checklist", origin));
+  // coming back within the grace period cancels a scheduled account deletion (PRD F13)
+  const restored = await cancelScheduledDeletion(user.id);
+  return NextResponse.redirect(new URL(restored ? "/checklist?notice=deletion_cancelled" : "/checklist", origin));
 }
