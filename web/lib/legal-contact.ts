@@ -1,12 +1,12 @@
 /**
  * Who runs Edge and how to reach them, shown on /privacy and /terms.
- * TODO before publishing: fill in with the owners (Sheyi, Daniel).
+ * Set by the owners (Sheyi, Daniel) on 2026-11-23.
  */
 export const LEGAL = {
   /** The person or company that runs Edge. */
-  operator: "TODO: operator name",
+  operator: "the EDGE team",
   /** Where traders send privacy questions and requests. */
-  contactEmail: "TODO: contact email",
+  contactEmail: "edgengglobal@gmail.com",
   /** The country whose laws apply to the terms. */
-  country: "TODO: country",
+  country: "Nigeria",
 } as const;
