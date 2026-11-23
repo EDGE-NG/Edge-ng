@@ -48,6 +48,10 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint -w @edge/web
+      # The job name above stays the same on purpose: branch protection
+      # requires this check by name.
+      - name: Unit tests (gate roll-up, risk and session rules, wording guardrail, push allowlist)
+        run: npm run test -w @edge/web
       - name: Build (includes the TypeScript type check)
         run: npm run build -w @edge/web
 

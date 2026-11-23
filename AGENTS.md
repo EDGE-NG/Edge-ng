@@ -111,7 +111,7 @@ Requires Node.js (LTS). From the repo root:
 npm install        # installs everything and builds shared/
 npm run dev:web    # frontend on http://localhost:3000
 npm run dev:api    # backend on http://localhost:4000 (health check: /health)
-npm test           # backend unit tests
+npm test           # unit tests (api and web)
 npm run build      # builds shared, api and web
 ```
 
