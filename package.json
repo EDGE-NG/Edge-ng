@@ -12,7 +12,7 @@
     "dev:web": "npm run dev -w @edge/web",
     "dev:api": "npm run start:dev -w @edge/api",
     "build": "npm run build -w @edge/shared && npm run build -w @edge/api && npm run build -w @edge/web",
-    "test": "npm run test -w @edge/api",
+    "test": "npm run test -w @edge/api && npm run test -w @edge/web",
     "lint": "npm run lint -w @edge/api && npm run lint -w @edge/web"
   }
 }

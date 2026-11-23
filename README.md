@@ -42,7 +42,7 @@ npm run dev:web    # frontend: http://localhost:3000
 npm run dev:api    # backend:  http://localhost:4000/health
 ```
 
-Other commands: `npm test` (backend tests), `npm run build` (build everything), `npm run lint`.
+Other commands: `npm test` (unit tests, api and web), `npm run build` (build everything), `npm run lint`.
 
 ## Settings (environment variables)
 
