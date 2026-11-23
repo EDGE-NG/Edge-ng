@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { db, uuid } from "@/lib/db";
-import { adminClient, authClient } from "@/lib/supabase";
+import { adminClient, authClient, removeUserFolder, USER_BUCKETS } from "@/lib/supabase";
 
 export async function POST(req: Request) {
   const user = await getUser();
@@ -10,6 +10,19 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { confirmation?: string };
   if (body.confirmation !== "DELETE") {
     return NextResponse.json({ error: "Type DELETE to confirm account deletion." }, { status: 400 });
+  }
+
+  // Delete the trader's files first (example charts, chart captures). If that
+  // fails, stop before touching the account, so a retry can finish the job and
+  // no files are ever left behind without an owner (PRD F13, Privacy Policy).
+  try {
+    for (const bucket of USER_BUCKETS) await removeUserFolder(bucket, user.id);
+  } catch (err) {
+    console.error("[delete-account] file removal failed:", err);
+    return NextResponse.json(
+      { error: "We couldn't delete your files just now, so your account wasn't deleted. Please try again." },
+      { status: 500 }
+    );
   }
 
   try {
@@ -28,7 +41,7 @@ export async function POST(req: Request) {
     const { error } = await admin.auth.admin.deleteUser(user.id);
     if (error) {
       console.error("[delete-account] admin delete failed:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Failed to delete account. Please try again." }, { status: 500 });
     }
 
     // Sign out from current session
