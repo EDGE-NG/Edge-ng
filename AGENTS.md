@@ -73,7 +73,6 @@ Check which area your human owns before editing. Do not change another person's 
 | Mayokun | Frontend with Daniel | `web/` |
 | Helen | Product design | design files; reviews `web/` UI |
 | Belle Afrique | AI testing with Daniel | AI evaluation set and test runs |
-| Moses | Research, legal, business, testing | legal page text, end-to-end tests |
 
 **Only Sheyi writes backend code** (`api/`, `supabase/`). Others who need a backend change describe it to Sheyi instead of writing it.
 
