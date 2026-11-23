@@ -6,9 +6,9 @@ describe("findPredictionLanguage: Edge never predicts (PR-GT-8, REQ-LLM-12)", ()
     "Price will likely rise from here.",
     "This trade is going to hit your target.",
     "Gold is poised to break out.",
-    "This is a good trade.",
+    "This is a great setup.",
     "A high-probability setup.",
-    "Guaranteed profit on this one.",
+    "Profit is guaranteed on this one.",
     "You should buy now.",
     "I recommend you go long.",
   ])("blocks: %s", (text) => expect(findPredictionLanguage(text)).not.toBeNull());
@@ -28,7 +28,7 @@ describe("findPredictionLanguage: Edge never predicts (PR-GT-8, REQ-LLM-12)", ()
   });
 
   it("handles curly quotes and extra spaces", () => {
-    expect(findPredictionLanguage("It’s  a   sure win")).not.toBeNull();
+    expect(findPredictionLanguage("You can’t   lose  here")).not.toBeNull();
   });
 });
 
