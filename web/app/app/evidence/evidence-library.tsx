@@ -336,14 +336,14 @@ function RuleBlock({
                   />
                   <span
                     className={`absolute top-1.5 left-1.5 rounded-full px-2 py-0.5 text-[0.68rem] font-semibold ${
-                      img.polarity === "valid" ? "bg-[#0e2a1b] text-pass" : "bg-[#2c0f15] text-fail"
+                      img.polarity === "valid" ? "bg-pass-bg text-pass" : "bg-err-bg text-fail"
                     }`}
                   >
                     {img.polarity === "valid" ? "✓ Valid" : "✕ Invalid"}
                   </span>
                   <span
                     className={`absolute inset-x-0 bottom-0 px-2 py-1 text-[0.68rem] font-medium ${
-                      img.confirmed ? "bg-black/60 text-ink/85" : "bg-[#2c250c]/90 text-maybe"
+                      img.confirmed ? "bg-surface/90 text-ink/85 backdrop-blur-xs" : "bg-warn-bg/95 text-maybe"
                     }`}
                   >
                     {img.confirmed ? "Confirmed" : "Check Edge's reading"}
@@ -532,9 +532,9 @@ function EvidenceDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ev-title"
-        className="glass-panel theme-dark max-h-[92dvh] w-full max-w-[980px] overflow-y-auto rounded-b-none p-5 outline-none sm:rounded-[20px] sm:p-7"
-        style={{ background: "linear-gradient(180deg,#0b1512,#060c0a)" }}
+        className="relative max-h-[92dvh] w-full max-w-[980px] overflow-y-auto rounded-b-none border border-line bg-[linear-gradient(180deg,var(--color-card-a),var(--color-card-b))] p-5 text-ink shadow-[0_40px_90px_-30px_rgba(0,0,0,0.6)] outline-none sm:rounded-[20px] sm:p-7"
       >
+        <div className="pointer-events-none absolute inset-x-[12%] top-0 h-px bg-gradient-to-r from-transparent via-accent to-transparent" aria-hidden="true" />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.16em] text-muted">
@@ -584,7 +584,7 @@ function EvidenceDialog({
                 <img
                   src={`/api/evidence/${image.id}/file`}
                   alt={`${image.polarity} example chart`}
-                  className="w-full rounded-2xl border border-line bg-black object-contain"
+                  className="w-full rounded-2xl border border-line bg-surface object-contain"
                 />
               )
             )}
@@ -615,7 +615,7 @@ function EvidenceDialog({
                         ? p === "valid"
                           ? "border-pass bg-pass-bg text-pass"
                           : "border-fail bg-err-bg text-fail"
-                        : "border-line text-ink/80 hover:border-[color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
+                        : "border-line bg-surface text-ink/80 hover:border-[color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
                     }`}
                   >
                     {p === "valid" ? "✓ Valid example" : "✕ Invalid example"}
@@ -672,7 +672,7 @@ function EvidenceDialog({
               </button>
             ) : (
               image && (
-                <section className="rounded-2xl border border-line p-4" aria-label="Edge's reading">
+                <section className="rounded-2xl border border-line bg-surface/60 p-4" aria-label="Edge's reading">
                   <p className="text-xs uppercase tracking-[0.16em] text-accent">
                     {image.corrected ? "Your reading" : "How Edge reads it"}
                   </p>

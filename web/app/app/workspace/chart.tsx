@@ -59,21 +59,22 @@ const ChartView = forwardRef<ChartHandle, { candles: Candle[]; indicators: Indic
     // create once
     useEffect(() => {
       if (!box.current) return;
+      const isLight = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
       const c = createChart(box.current, {
         autoSize: true,
         layout: {
-          background: { type: ColorType.Solid, color: "#070b0a" },
-          textColor: "#9aa59f",
+          background: { type: ColorType.Solid, color: isLight ? "#ffffff" : "#070b0a" },
+          textColor: isLight ? "#57605b" : "#9aa59f",
           fontFamily: "Inter Tight, system-ui, sans-serif",
-          panes: { separatorColor: "rgba(255,255,255,0.08)" },
+          panes: { separatorColor: isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)" },
         },
         grid: {
-          vertLines: { color: "rgba(255,255,255,0.04)" },
-          horzLines: { color: "rgba(255,255,255,0.04)" },
+          vertLines: { color: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)" },
+          horzLines: { color: isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)" },
         },
         crosshair: { mode: CrosshairMode.Normal },
-        rightPriceScale: { borderColor: "rgba(255,255,255,0.1)" },
-        timeScale: { borderColor: "rgba(255,255,255,0.1)", timeVisible: true, secondsVisible: false },
+        rightPriceScale: { borderColor: isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.1)" },
+        timeScale: { borderColor: isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.1)", timeVisible: true, secondsVisible: false },
       });
       main.current = c.addSeries(CandlestickSeries, {
         upColor: "#26a69a",
@@ -84,7 +85,28 @@ const ChartView = forwardRef<ChartHandle, { candles: Candle[]; indicators: Indic
       });
       chart.current = c;
       const linesMap = lines.current;
+
+      function updateTheme() {
+        const light = document.documentElement.getAttribute("data-theme") === "light";
+        c.applyOptions({
+          layout: {
+            background: { type: ColorType.Solid, color: light ? "#ffffff" : "#070b0a" },
+            textColor: light ? "#57605b" : "#9aa59f",
+            panes: { separatorColor: light ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.08)" },
+          },
+          grid: {
+            vertLines: { color: light ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)" },
+            horzLines: { color: light ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.04)" },
+          },
+          rightPriceScale: { borderColor: light ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.1)" },
+          timeScale: { borderColor: light ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.1)" },
+        });
+      }
+
+      window.addEventListener("edge:theme-changed", updateTheme);
+
       return () => {
+        window.removeEventListener("edge:theme-changed", updateTheme);
         c.remove();
         chart.current = null;
         main.current = null;
