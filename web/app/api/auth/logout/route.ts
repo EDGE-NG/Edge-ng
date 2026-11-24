@@ -33,7 +33,10 @@ export async function POST(req: Request) {
       const { error } = await supabase.auth.signOut({ scope: "others" });
       if (error) {
         console.error("[logout] failed to sign out other devices:", error);
-        return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+        return NextResponse.json(
+          { ok: false, error: "Couldn't sign out other devices. Try again." },
+          { status: 400 }
+        );
       }
       return NextResponse.json({ ok: true, scope: "others" });
     }

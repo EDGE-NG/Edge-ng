@@ -124,9 +124,7 @@ export default function RulesPanel({
           } else {
             right = (
               <span className={`inline-flex shrink-0 items-center gap-1 text-xs ${STATUS_TONE[dot]}`}>
-                <span className="cursor-pointer hover:underline group-hover:underline">
-                  {dot === "checking" && r.timeframe ? `Checking ${TF_LABEL[r.timeframe]}…` : STATUS_TEXT[dot]}
-                </span>
+                {dot === "checking" && r.timeframe ? `Checking ${TF_LABEL[r.timeframe]}…` : STATUS_TEXT[dot]}
                 {canOpen && <Chevron className={`h-3 w-3 transition-transform ${isOpen ? "rotate-90" : ""}`} />}
               </span>
             );
@@ -154,14 +152,14 @@ export default function RulesPanel({
               {canOpen ? (
                 <button
                   type="button"
-                  className="group flex w-full items-center gap-3 py-3 text-left"
+                  className="flex w-full items-center gap-3 py-3 text-left"
                   aria-expanded={isOpen}
                   onClick={() => setOpen(isOpen ? null : r.itemKey)}
                 >
                   {row}
                 </button>
               ) : (
-                <div className="group flex items-center gap-3 py-3">{row}</div>
+                <div className="flex items-center gap-3 py-3">{row}</div>
               )}
               {sub && !isOpen && <p className={`-mt-1.5 mb-3 ml-[30px] text-xs leading-snug ${r.mode === "session" && r.status === "fail" ? "text-fail" : "text-muted"}`}>{sub}</p>}
               {isOpen && r.check && <Why rule={r} />}
