@@ -135,9 +135,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         </Link>
       </header>
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 lg:grid-cols-[minmax(0,440px)_1fr]">
-        <section className="glass-panel w-full p-7 sm:p-8 fade-up" aria-labelledby="auth-h">
-          <h1 id="auth-h" className="text-[2rem] leading-tight">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 lg:grid-cols-[minmax(0,460px)_1fr]">
+        <section className="glass-panel w-full p-8 sm:p-9 fade-up" aria-labelledby="auth-h">
+          <h1 id="auth-h" className="text-[2rem] leading-tight font-semibold">
             {signup ? (
               <>
                 Define your <span className="lime">edge.</span>
@@ -154,12 +154,12 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "Sign in to pick up your edge where you left it."}
           </p>
 
-          <form onSubmit={submit} className="mt-7 space-y-4" noValidate>
+          <form onSubmit={submit} className="mt-8 space-y-7" noValidate>
             {signup && (
               <Field label="Your name" htmlFor="name">
                 <input
                   id="name"
-                  className="input"
+                  className="input h-12 px-4"
                   autoComplete="name"
                   required
                   value={name}
@@ -171,7 +171,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <Field label="Email" htmlFor="email">
               <input
                 id="email"
-                className="input"
+                className="input h-12 px-4"
                 type="email"
                 autoComplete="email"
                 required
@@ -182,14 +182,26 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               />
             </Field>
             <Field
-              label="Password"
+              label={
+                <span className="flex items-center justify-between">
+                  <span>Password</span>
+                  {!signup && (
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs font-normal text-muted hover:text-accent transition"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
+                </span>
+              }
               htmlFor="password"
               hint={signup ? "At least 8 characters." : undefined}
             >
               <div className="relative">
                 <input
                   id="password"
-                  className="input pr-16"
+                  className="input h-12 px-4 pr-16"
                   type={showPw ? "text" : "password"}
                   autoComplete={signup ? "new-password" : "current-password"}
                   required
@@ -210,7 +222,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </Field>
 
             {signup && (
-              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted">
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted pt-1">
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 accent-[#5ef088]"
@@ -242,7 +254,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
             <button
               type="submit"
-              className="btn btn-main w-full"
+              className="btn btn-main w-full mt-3 min-h-[48px]"
               disabled={
                 busy !== "" || !email || !password || (signup && (!name.trim() || !accept))
               }
@@ -257,7 +269,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+          <div className="my-7 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -265,7 +277,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
           <button
             type="button"
-            className="btn w-full gap-3 border border-line bg-surface text-ink hover:border-accent/50"
+            className="btn w-full min-h-[48px] gap-3 border border-line bg-surface text-ink hover:border-accent/50"
             disabled={busy !== "" || (signup && !accept)}
             onClick={() => {
               setBusy("google");
@@ -319,18 +331,18 @@ function Field({
   hint,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   htmlFor: string;
   hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-ink">
+      <label htmlFor={htmlFor} className="mb-2.5 block text-sm font-medium text-ink">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
+      {hint && <p className="mt-2 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
