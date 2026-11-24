@@ -261,8 +261,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             >
               {busy === "submit"
                 ? signup
-                  ? "Creating your account…"
-                  : "Signing in…"
+                ? "Creating your account…"
+                : "Signing in…"
                 : signup
                   ? "Create account"
                   : "Sign in"}
@@ -287,7 +287,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <GoogleMark className="h-4.5 w-4.5" />
             {busy === "google" ? "Opening Google…" : "Continue with Google"}
           </button>
-          <p className="mt-2 text-center text-xs text-muted">
+          <p className="mt-3 text-center text-xs leading-relaxed text-muted/80">
             {signup
               ? accept
                 ? "Google confirms your email, so there's no confirmation link."
@@ -295,7 +295,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "By continuing with Google, you confirm Edge is decision support, not financial advice."}
           </p>
 
-          <p className="mt-6 text-center text-sm text-muted">
+          <p className="mt-8 text-center text-sm text-muted">
             {signup ? "Already have an account? " : "New to Edge? "}
             <Link href={signup ? "/login" : "/signup"} className="text-ink underline-offset-4 hover:underline">
               {signup ? "Sign in" : "Create an account"}
