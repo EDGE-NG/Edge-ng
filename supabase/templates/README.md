@@ -1,6 +1,6 @@
 # Edge email templates (Supabase Auth)
 
-Branded emails for sign-up, password reset and the other account emails. Dark Edge design, green button, plain-link fallback, and a footer with Privacy, Terms and the contact email.
+Branded emails for sign-up, password reset and the other account emails. A calm, ordinary email look: light background, white card, an Edge-green button, a plain-link fallback, and a footer with Privacy, Terms and the contact email.
 
 Local Supabase uses these files automatically (`supabase/config.toml`, `[auth.email.template.*]`). **The live project doesn't read them from the repo:** paste them into Supabase by hand after any change.
 
