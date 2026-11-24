@@ -182,7 +182,19 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               />
             </Field>
             <Field
-              label="Password"
+              label={
+                <span className="flex items-center justify-between">
+                  <span>Password</span>
+                  {!signup && (
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs font-normal text-muted hover:text-accent transition"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
+                </span>
+              }
               htmlFor="password"
               hint={signup ? "At least 8 characters." : undefined}
             >
@@ -319,7 +331,7 @@ function Field({
   hint,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   htmlFor: string;
   hint?: string;
   children: React.ReactNode;

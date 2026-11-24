@@ -21,6 +21,12 @@ export async function GET(req: Request) {
   const origin = url.origin;
   const back = (error: string) => NextResponse.redirect(new URL(`/login?error=${error}`, origin));
 
+  const nextParam = url.searchParams.get("next");
+  const safeNext =
+    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.startsWith("/\\")
+      ? nextParam
+      : null;
+
   const code = url.searchParams.get("code");
   // the trader closed Google's window or said no
   if (!code) return back(url.searchParams.get("error") === "access_denied" ? "google_cancelled" : "google");
@@ -78,5 +84,6 @@ export async function GET(req: Request) {
 
   // coming back within the grace period cancels a scheduled account deletion (PRD F13)
   const restored = await cancelScheduledDeletion(user.id);
-  return NextResponse.redirect(new URL(restored ? "/checklist?notice=deletion_cancelled" : "/checklist", origin));
+  const destination = safeNext ?? (restored ? "/checklist?notice=deletion_cancelled" : "/checklist");
+  return NextResponse.redirect(new URL(destination, origin));
 }
