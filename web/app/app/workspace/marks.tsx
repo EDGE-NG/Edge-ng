@@ -72,7 +72,7 @@ export function StatusDot({ state }: { state: DotState }) {
   const box = "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full";
   if (state === "pass") return <span className={`${box} bg-accent text-bg`} aria-hidden><Tick /></span>;
   if (state === "fail") return <span className={`${box} bg-fail text-bg`} aria-hidden><Cross /></span>;
-  if (state === "inconclusive") return <span className={`${box} bg-maybe text-[11px] font-bold text-bg`} aria-hidden>?</span>;
+  if (state === "inconclusive") return <span className={`${box} bg-accent text-[11px] font-bold text-bg`} aria-hidden>?</span>;
   if (state === "checking")
     return <span className={`${box} animate-spin border-2 border-accent/20 border-t-accent motion-reduce:animate-none`} aria-hidden />;
   if (state === "ask") return <span className={`${box} border-2 border-maybe`} aria-hidden />;

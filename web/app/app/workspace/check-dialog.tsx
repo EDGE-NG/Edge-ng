@@ -218,7 +218,7 @@ export default function CheckDialog({
                 <div className="flex items-center gap-3 py-3">
                   <StatusDot state={st.dot} />
                   <span className="min-w-0 flex-1 text-sm leading-snug text-ink/90">{r.text}</span>
-                  <span className={`shrink-0 text-xs ${STATUS_TONE[st.dot]}`}>{st.label}</span>
+                  <span className={`shrink-0 text-xs ${STATUS_TONE[st.dot]} cursor-pointer hover:underline`}>{st.label}</span>
                 </div>
                 {r.itemKey === asking && (
                   <div className="-mt-1 mb-3 ml-[30px] flex flex-wrap items-center gap-2 text-[13px]">
@@ -384,7 +384,7 @@ function Outcome({
       ? { title: "Passes your checklist", box: "border-accent/45 bg-pass-bg", tone: "text-accent", seal: "bg-accent", mark: <Tick className="h-4 w-4" /> }
       : decision.result === "denied"
         ? { title: "Fails your checklist", box: "border-fail/45 bg-err-bg", tone: "text-fail", seal: "bg-fail", mark: <Cross className="h-4 w-4" /> }
-        : { title: "Needs more evidence", box: "border-maybe/45 bg-warn-bg", tone: "text-maybe", seal: "bg-maybe", mark: <span className="text-sm font-bold">?</span> };
+        : { title: "Needs more evidence", box: "border-maybe/45 bg-warn-bg", tone: "text-maybe", seal: "bg-accent", mark: <span className="text-sm font-bold">?</span> };
   const failingNames = r.failing.map((f) => f.text);
   const btn = "inline-flex h-10 items-center rounded-full border border-line px-4 text-sm font-medium transition hover:bg-panel disabled:opacity-50";
   const main = "inline-flex h-10 items-center rounded-full bg-ink px-4 text-sm font-medium text-bg transition hover:opacity-90 disabled:opacity-50";
