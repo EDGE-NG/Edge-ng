@@ -36,7 +36,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [accept, setAccept] = useState(false);
   const [error, setError] = useState("");
   const [exists, setExists] = useState(false);
@@ -59,6 +61,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (signup && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
     setBusy("submit");
     setError("");
     setExists(false);
@@ -154,7 +160,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "Sign in to pick up your edge where you left it."}
           </p>
 
-          <form onSubmit={submit} className="mt-8 space-y-7" noValidate>
+          <form onSubmit={submit} className="mt-8 space-y-6" noValidate>
             {signup && (
               <Field label="Your name" htmlFor="name">
                 <input
@@ -222,6 +228,40 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </Field>
 
             {signup && (
+              <Field
+                label="Confirm password"
+                htmlFor="confirm-password"
+                hint={
+                  confirmPassword && password !== confirmPassword
+                    ? "Passwords do not match."
+                    : undefined
+                }
+              >
+                <div className="relative">
+                  <input
+                    id="confirm-password"
+                    className="input h-12 px-4 pr-16"
+                    type={showConfirmPw ? "text" : "password"}
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPw((v) => !v)}
+                    className="absolute inset-y-0 right-2 my-auto h-8 rounded-full px-3 text-xs text-muted hover:text-ink"
+                    aria-label={showConfirmPw ? "Hide confirm password" : "Show confirm password"}
+                  >
+                    {showConfirmPw ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </Field>
+            )}
+
+            {signup && (
               <label className="flex cursor-pointer items-start gap-3 text-sm text-muted pt-1">
                 <input
                   type="checkbox"
@@ -256,7 +296,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               type="submit"
               className="btn btn-main w-full mt-3 min-h-[48px]"
               disabled={
-                busy !== "" || !email || !password || (signup && (!name.trim() || !accept))
+                busy !== "" ||
+                !email ||
+                !password ||
+                (signup && (!name.trim() || !accept || !confirmPassword))
               }
             >
               {busy === "submit"
