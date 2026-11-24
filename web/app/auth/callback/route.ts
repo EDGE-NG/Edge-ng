@@ -22,14 +22,24 @@ export async function GET(req: Request) {
   const back = (error: string) => NextResponse.redirect(new URL(`/login?error=${error}`, origin));
 
   const nextParam = url.searchParams.get("next");
-  const safeNext =
-    nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.startsWith("/\\")
-      ? nextParam
-      : null;
+  let safeNext: string | null = null;
+  if (nextParam) {
+    try {
+      const u = new URL(nextParam, origin);
+      if (u.origin === origin) safeNext = u.pathname + u.search;
+    } catch {
+      /* ignore */
+    }
+  }
 
   const code = url.searchParams.get("code");
   // the trader closed Google's window or said no
-  if (!code) return back(url.searchParams.get("error") === "access_denied" ? "google_cancelled" : "google");
+  if (!code) {
+    if (safeNext?.startsWith("/reset-password")) {
+      return NextResponse.redirect(new URL("/forgot-password?error=expired", origin));
+    }
+    return back(url.searchParams.get("error") === "access_denied" ? "google_cancelled" : "google");
+  }
 
   const store = await cookies();
   const raw = store.get(OAUTH_COOKIE)?.value;
@@ -45,7 +55,10 @@ export async function GET(req: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   const user = data?.user;
   if (error || !user) {
-    console.error("[auth/callback] Google sign-in failed:", error);
+    console.error("[auth/callback] Auth code exchange failed:", error);
+    if (safeNext?.startsWith("/reset-password")) {
+      return NextResponse.redirect(new URL("/forgot-password?error=expired", origin));
+    }
     return back("google");
   }
 

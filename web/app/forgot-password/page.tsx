@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+
+const URL_ERRORS: Record<string, string> = {
+  expired: "This reset link has expired or was opened on another device. Request a new one.",
+};
+
+const noSubscribe = () => () => {};
+const readUrlError = () =>
+  URL_ERRORS[new URLSearchParams(window.location.search).get("error") ?? ""] ?? "";
 
 function EdgeMark({ className }: { className?: string }) {
   return (
@@ -24,6 +32,8 @@ export default function ForgotPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const urlError = useSyncExternalStore(noSubscribe, readUrlError, () => "");
+  const shownError = error || urlError;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,9 +145,9 @@ export default function ForgotPasswordPage() {
                 />
               </div>
 
-              {error && (
+              {shownError && (
                 <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3.5 py-2.5 text-sm text-fail">
-                  {error}
+                  {shownError}
                 </p>
               )}
 
