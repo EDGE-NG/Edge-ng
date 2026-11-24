@@ -107,9 +107,11 @@ export default function PrivacyPage() {
 
       <Section title="5. How long we keep it">
         <p>
-          We keep your data while you have an account. When you delete your account, we delete your account and the
-          data linked to it. We keep a short record that an account was deleted (its email address and the date) for
-          up to 24 months, for security and to handle disputes.
+          We keep your data while you have an account. When you delete your account, you are signed out and have 14
+          days to change your mind: signing in again cancels the deletion. After 14 days we delete your account and
+          all the data linked to it, including your uploaded images and chart captures. We keep a short record that
+          an account was deleted (its email address and the date) for up to 24 months, for security and to handle
+          disputes.
         </p>
       </Section>
 
@@ -123,7 +125,8 @@ export default function PrivacyPage() {
             they were, and edits create a new version).
           </li>
           <li>
-            <strong>Delete your account:</strong> Settings → Delete Account &amp; Data.
+            <strong>Delete your account:</strong> Settings → Delete Account &amp; Data (deleted after 14 days unless
+            you sign in again).
           </li>
           <li>
             <strong>Turn off alerts, notifications or emails</strong> at any time on the Alerts page.

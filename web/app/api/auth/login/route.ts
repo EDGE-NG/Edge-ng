@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cancelScheduledDeletion } from "@/lib/account-deletion";
 import { clearAttempts, tooManyAttempts } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { authClient } from "@/lib/supabase";
@@ -36,9 +37,14 @@ export async function POST(req: Request) {
   }
 
   clearAttempts(`login:${email}`);
+  // coming back within the grace period cancels a scheduled account deletion (PRD F13)
+  const restored = await cancelScheduledDeletion(data.user.id);
   const p = await db.one<{ display_name: string | null }>(
     "SELECT display_name FROM profiles WHERE user_id = ?",
     data.user.id
   );
-  return NextResponse.json({ user: { id: data.user.id, email: data.user.email, name: p?.display_name ?? null } });
+  return NextResponse.json({
+    user: { id: data.user.id, email: data.user.email, name: p?.display_name ?? null },
+    deletionCancelled: restored,
+  });
 }

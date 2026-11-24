@@ -105,6 +105,16 @@ The sign-in and sign-up pages have a **Continue with Google** button (PRD F1), h
 
 Locally, Google is off by default (`supabase/config.toml`); email sign-up works without it.
 
+## Account deletion (14-day grace period)
+
+Settings → Delete Account & Data doesn't delete at once (PRD F13; `lib/account-deletion.ts`, migration `0004_account_deletion_grace.sql`):
+
+1. The trader confirms. `profiles.deletion_due_at` is set 14 days ahead, they are signed out on every device, and it's recorded in `audit_log`.
+2. Signing in again (password or Google) before that date cancels the deletion.
+3. Once a day, `GET /api/account/purge` (header `Authorization: Bearer <CRON_SECRET>`, the same secret as the alerts) deletes each account whose date has passed: its files in Storage first, then the account, which removes all its data. If anything fails, the account stays and the next run tries again.
+
+**Scheduler:** on cron-job.org, add a second job like the alerts one, but with the URL `https://edge-ng.vercel.app/api/account/purge` and the schedule **once a day**.
+
 ## Checklist alerts
 
 The trader picks markets (e.g. Gold, Nasdaq 100) for Edge to watch with an approved checklist (`/app/alerts`). On each new candle the server checks the checklist's hard-gate chart rules from its own price data, with the same rule check as the workspace (`lib/alerts.ts`). When they all pass, Edge stores an alert and sends a browser/phone notification and an email. An alert is not an approval: the trader checks the trade in the workspace and the gate decides. Tables: `supabase/migrations/0003_checklist_alerts.sql`.
