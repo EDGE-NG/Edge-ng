@@ -154,12 +154,12 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "Sign in to pick up your edge where you left it."}
           </p>
 
-          <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
+          <form onSubmit={submit} className="mt-8 space-y-7" noValidate>
             {signup && (
               <Field label="Your name" htmlFor="name">
                 <input
                   id="name"
-                  className="input"
+                  className="input h-12 px-4"
                   autoComplete="name"
                   required
                   value={name}
@@ -171,7 +171,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <Field label="Email" htmlFor="email">
               <input
                 id="email"
-                className="input"
+                className="input h-12 px-4"
                 type="email"
                 autoComplete="email"
                 required
@@ -201,7 +201,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               <div className="relative">
                 <input
                   id="password"
-                  className="input pr-16"
+                  className="input h-12 px-4 pr-16"
                   type={showPw ? "text" : "password"}
                   autoComplete={signup ? "new-password" : "current-password"}
                   required
@@ -222,7 +222,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </Field>
 
             {signup && (
-              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted">
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted pt-1">
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 accent-[#5ef088]"
@@ -254,7 +254,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
             <button
               type="submit"
-              className="btn btn-main w-full mt-2"
+              className="btn btn-main w-full mt-3 min-h-[48px]"
               disabled={
                 busy !== "" || !email || !password || (signup && (!name.trim() || !accept))
               }
@@ -269,7 +269,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+          <div className="my-7 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -277,7 +277,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
           <button
             type="button"
-            className="btn w-full gap-3 border border-line bg-surface text-ink hover:border-accent/50"
+            className="btn w-full min-h-[48px] gap-3 border border-line bg-surface text-ink hover:border-accent/50"
             disabled={busy !== "" || (signup && !accept)}
             onClick={() => {
               setBusy("google");
@@ -338,11 +338,11 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-2 block text-sm font-medium text-ink">
+      <label htmlFor={htmlFor} className="mb-2.5 block text-sm font-medium text-ink">
         {label}
       </label>
       {children}
-      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
+      {hint && <p className="mt-2 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
