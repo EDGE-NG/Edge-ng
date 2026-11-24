@@ -14,6 +14,10 @@ function clearCachedProfile() {
   }
 }
 
+export interface SignOutOptions {
+  scope?: "local" | "global";
+}
+
 /**
  * Sign the trader out everywhere in the app (sidebar, Settings): end the
  * Supabase session, clear the cached profile so the next person on this
@@ -21,9 +25,17 @@ function clearCachedProfile() {
  * the trader signed in, if the server couldn't be reached.
  * Pass the page's `useRouter()`.
  */
-export async function signOut(router: { push: (href: string) => void; refresh: () => void }): Promise<boolean> {
+export async function signOut(
+  router: { push: (href: string) => void; refresh: () => void },
+  options?: SignOutOptions
+): Promise<boolean> {
+  const scope = options?.scope ?? "local";
   try {
-    const res = await fetch("/api/auth/logout", { method: "POST" });
+    const res = await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope }),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (err) {
     console.error("Sign out failed", err);
@@ -34,6 +46,30 @@ export async function signOut(router: { push: (href: string) => void; refresh: (
   router.push("/");
   router.refresh();
   return true;
+}
+
+/**
+ * Sign out of all other devices while keeping the current device signed in.
+ * Revokes active sessions on all other browsers/devices.
+ */
+export async function signOutOtherDevices(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "others" }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    toast.success("Signed out of all other devices.");
+    return true;
+  } catch (err) {
+    console.error("Sign out other devices failed", err);
+    toast.error("Couldn't sign out of other devices. Check your connection and try again.");
+    return false;
+  }
 }
 
 /**
