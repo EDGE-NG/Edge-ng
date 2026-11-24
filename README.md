@@ -79,7 +79,6 @@ Owners: **Sheyi** and **Daniel**.
 | Mayokun | Frontend (with Daniel) |
 | Helen | Product design |
 | Belle Afrique | AI testing (with Daniel) |
-| Moses | Research, legal, business and testing |
 
 ## Working in this repo
 
