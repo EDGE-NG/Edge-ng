@@ -72,6 +72,60 @@ export async function signOutOtherDevices(): Promise<boolean> {
   }
 }
 
+export interface DeviceSession {
+  id: string;
+  isCurrent: boolean;
+  device: string;
+  browser: string;
+  os: string;
+  isMobile: boolean;
+  lastActive: string;
+  createdAt?: string;
+  ip?: string | null;
+}
+
+/**
+ * Fetch all active sessions / devices for the signed-in user.
+ */
+export async function fetchDeviceSessions(): Promise<DeviceSession[]> {
+  try {
+    const res = await fetch("/api/auth/sessions");
+    if (res.status === 401) {
+      handleSessionExpired();
+      return [];
+    }
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.sessions || [];
+  } catch (err) {
+    console.error("Failed to load device sessions:", err);
+    return [];
+  }
+}
+
+/**
+ * Revoke a specific device session.
+ */
+export async function revokeDeviceSession(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth/sessions", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    toast.success("Device signed out successfully.");
+    return true;
+  } catch (err) {
+    console.error("Failed to revoke session:", err);
+    toast.error("Couldn't sign out that device. Try again.");
+    return false;
+  }
+}
+
 /**
  * Handles session expiration across all client-side views.
  * When an authenticated API endpoint returns HTTP 401:

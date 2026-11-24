@@ -4,10 +4,28 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppFrame from "../../_components/app-frame";
 import Dropdown from "../../_components/dropdown";
-import { IconCheck, IconGear, IconLogout, IconMoon, IconShield, IconSun, IconTrash, IconX } from "../../_components/icons";
+import {
+  IconCheck,
+  IconGear,
+  IconLogout,
+  IconMonitor,
+  IconMoon,
+  IconShield,
+  IconSmartphone,
+  IconSun,
+  IconTrash,
+  IconX,
+} from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
-import { handleSessionExpired, signOut, signOutOtherDevices } from "@/lib/client-auth";
+import {
+  fetchDeviceSessions,
+  handleSessionExpired,
+  revokeDeviceSession,
+  signOut,
+  signOutOtherDevices,
+  type DeviceSession,
+} from "@/lib/client-auth";
 
 const TIMEZONES = [
   "UTC",
@@ -53,6 +71,24 @@ export default function SettingsView() {
   const [signingOut, setSigningOut] = useState(false);
   const [showSignOutOthersModal, setShowSignOutOthersModal] = useState(false);
   const [signingOutOthers, setSigningOutOthers] = useState(false);
+  const [sessions, setSessions] = useState<DeviceSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoadingSessions(true);
+      const list = await fetchDeviceSessions();
+      if (alive) {
+        setSessions(list);
+        setLoadingSessions(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -672,33 +708,29 @@ export default function SettingsView() {
 
         {/* Active Sessions & Sign Out: on every tab, below the tab's content */}
         <section className="card mt-6 p-6 sm:p-8" aria-labelledby="signout-title">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-line pb-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 flex-1">
-              <h3 id="signout-title" className="text-lg font-medium text-ink">Active Sessions & Sign Out</h3>
+              <div className="flex items-center gap-2.5">
+                <h3 id="signout-title" className="text-lg font-medium text-ink">Active Devices & Sessions</h3>
+                {sessions.length > 0 && (
+                  <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                    {sessions.length} {sessions.length === 1 ? "device" : "devices"}
+                  </span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-muted">
                 {email ? (
                   <>
-                    Signed in as <span className="break-all text-ink">{email}</span>. Manage where Edge is signed in.
+                    Signed in as <span className="break-all text-ink">{email}</span>. Manage all devices and browsers where Edge is signed in.
                   </>
                 ) : (
-                  "Manage your Edge sessions across all devices."
+                  "Manage all devices and browsers where Edge is signed in."
                 )}
               </p>
-
-              <div className="mt-4 flex flex-col gap-2 rounded-lg border border-line bg-panel/40 p-3.5 text-xs">
-                <div className="flex items-center gap-2 text-ink">
-                  <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-                  <span className="font-medium">Current session</span>
-                  <span className="rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] text-muted">This device</span>
-                </div>
-                <p className="leading-relaxed text-muted">
-                  Left yourself logged in on a shared computer, office desktop, or phone? You can revoke access for all other devices while staying signed in here.
-                </p>
-              </div>
             </div>
 
-            <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-              <div className="flex flex-wrap items-center gap-2">
+            {sessions.filter((s) => !s.isCurrent).length > 0 && (
+              <div className="flex shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowSignOutOthersModal(true)}
@@ -707,22 +739,93 @@ export default function SettingsView() {
                   title="Revoke access on all devices except this one"
                 >
                   <IconShield className="h-3.5 w-3.5 text-accent" />
-                  Sign out other devices
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSigningOut(true);
-                    if (!(await signOut(router))) setSigningOut(false);
-                  }}
-                  disabled={signingOut || signingOutOthers}
-                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-line px-4 py-2 text-xs font-medium text-ink transition hover:bg-panel disabled:opacity-60"
-                >
-                  <IconLogout className="h-3.5 w-3.5" />
-                  {signingOut ? "Signing out…" : "Sign out"}
+                  Sign out all other devices
                 </button>
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* Device session cards */}
+          <div className="mt-5 space-y-3">
+            {loadingSessions ? (
+              <div className="py-6 text-center text-xs text-muted">Loading your active devices…</div>
+            ) : sessions.length === 0 ? (
+              <div className="py-6 text-center text-xs text-muted">No other active sessions found.</div>
+            ) : (
+              sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex flex-col gap-3 rounded-xl border border-line bg-panel/30 p-4 transition hover:bg-panel/50 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <div
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border ${
+                        s.isCurrent
+                          ? "border-accent/40 bg-accent/10 text-accent"
+                          : "border-line bg-surface text-muted"
+                      }`}
+                    >
+                      {s.isMobile ? <IconSmartphone className="h-4 w-4" /> : <IconMonitor className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-ink truncate">{s.device}</span>
+                        {s.isCurrent && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-pass/30 bg-pass-bg px-2 py-0.5 text-[10px] font-semibold text-pass">
+                            <span className="h-1.5 w-1.5 rounded-full bg-pass animate-pulse" />
+                            This device
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {s.isCurrent ? (
+                          <span className="font-medium text-accent">Active now</span>
+                        ) : (
+                          <>
+                            Last active {new Date(s.lastActive).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </>
+                        )}
+                        {s.ip && <span className="opacity-75"> · IP: {s.ip}</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
+                    {s.isCurrent ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setSigningOut(true);
+                          if (!(await signOut(router))) setSigningOut(false);
+                        }}
+                        disabled={signingOut}
+                        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-line px-3.5 py-1.5 text-xs font-medium text-ink transition hover:bg-panel disabled:opacity-60"
+                      >
+                        <IconLogout className="h-3.5 w-3.5" />
+                        {signingOut ? "Signing out…" : "Sign out"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setRevokingSessionId(s.id);
+                          const ok = await revokeDeviceSession(s.id);
+                          setRevokingSessionId(null);
+                          if (ok) {
+                            setSessions((prev) => prev.filter((item) => item.id !== s.id));
+                          }
+                        }}
+                        disabled={revokingSessionId === s.id}
+                        className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-fail/30 bg-fail/5 px-3 py-1.5 text-xs font-medium text-fail transition hover:border-fail/50 hover:bg-fail/15 disabled:opacity-50"
+                      >
+                        <IconTrash className="h-3.5 w-3.5" />
+                        {revokingSessionId === s.id ? "Signing out…" : "Sign out device"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </section>
 

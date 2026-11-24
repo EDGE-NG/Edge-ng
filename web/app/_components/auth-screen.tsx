@@ -135,9 +135,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         </Link>
       </header>
 
-      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 lg:grid-cols-[minmax(0,440px)_1fr]">
-        <section className="glass-panel w-full p-7 sm:p-8 fade-up" aria-labelledby="auth-h">
-          <h1 id="auth-h" className="text-[2rem] leading-tight">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 lg:grid-cols-[minmax(0,460px)_1fr]">
+        <section className="glass-panel w-full p-8 sm:p-9 fade-up" aria-labelledby="auth-h">
+          <h1 id="auth-h" className="text-[2rem] leading-tight font-semibold">
             {signup ? (
               <>
                 Define your <span className="lime">edge.</span>
@@ -154,7 +154,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "Sign in to pick up your edge where you left it."}
           </p>
 
-          <form onSubmit={submit} className="mt-7 space-y-4" noValidate>
+          <form onSubmit={submit} className="mt-8 space-y-5" noValidate>
             {signup && (
               <Field label="Your name" htmlFor="name">
                 <input
@@ -182,7 +182,19 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               />
             </Field>
             <Field
-              label="Password"
+              label={
+                <span className="flex items-center justify-between">
+                  <span>Password</span>
+                  {!signup && (
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs font-normal text-muted hover:text-accent transition"
+                    >
+                      Forgot password?
+                    </Link>
+                  )}
+                </span>
+              }
               htmlFor="password"
               hint={signup ? "At least 8 characters." : undefined}
             >
@@ -242,22 +254,22 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
             <button
               type="submit"
-              className="btn btn-main w-full"
+              className="btn btn-main w-full mt-2"
               disabled={
                 busy !== "" || !email || !password || (signup && (!name.trim() || !accept))
               }
             >
               {busy === "submit"
                 ? signup
-                  ? "Creating your account…"
-                  : "Signing in…"
+                ? "Creating your account…"
+                : "Signing in…"
                 : signup
                   ? "Create account"
                   : "Sign in"}
             </button>
           </form>
 
-          <div className="my-5 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+          <div className="my-6 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -275,7 +287,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <GoogleMark className="h-4.5 w-4.5" />
             {busy === "google" ? "Opening Google…" : "Continue with Google"}
           </button>
-          <p className="mt-2 text-center text-xs text-muted">
+          <p className="mt-3 text-center text-xs leading-relaxed text-muted/80">
             {signup
               ? accept
                 ? "Google confirms your email, so there's no confirmation link."
@@ -283,7 +295,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "By continuing with Google, you confirm Edge is decision support, not financial advice."}
           </p>
 
-          <p className="mt-6 text-center text-sm text-muted">
+          <p className="mt-8 text-center text-sm text-muted">
             {signup ? "Already have an account? " : "New to Edge? "}
             <Link href={signup ? "/login" : "/signup"} className="text-ink underline-offset-4 hover:underline">
               {signup ? "Sign in" : "Create an account"}
@@ -319,14 +331,14 @@ function Field({
   hint,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   htmlFor: string;
   hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-ink">
+      <label htmlFor={htmlFor} className="mb-2 block text-sm font-medium text-ink">
         {label}
       </label>
       {children}
