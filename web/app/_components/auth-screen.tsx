@@ -36,7 +36,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [accept, setAccept] = useState(false);
   const [error, setError] = useState("");
   const [exists, setExists] = useState(false);
@@ -59,6 +61,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
+    if (signup && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
     setBusy("submit");
     setError("");
     setExists(false);
@@ -136,7 +142,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       </header>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-5 py-10 lg:grid-cols-[minmax(0,460px)_1fr]">
-        <section className="glass-panel w-full p-8 sm:p-9 fade-up" aria-labelledby="auth-h">
+        <section
+          className={`glass-panel w-full fade-up ${signup ? "p-7 sm:p-8" : "p-8 sm:p-9"}`}
+          aria-labelledby="auth-h"
+        >
           <h1 id="auth-h" className="text-[2rem] leading-tight font-semibold">
             {signup ? (
               <>
@@ -154,9 +163,13 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "Sign in to pick up your edge where you left it."}
           </p>
 
-          <form onSubmit={submit} className="mt-8 space-y-7" noValidate>
+          <form
+            onSubmit={submit}
+            className={signup ? "mt-6 space-y-[18px]" : "mt-8 space-y-6"}
+            noValidate
+          >
             {signup && (
-              <Field label="Your name" htmlFor="name">
+              <Field label="Your name" htmlFor="name" compact>
                 <input
                   id="name"
                   className="input h-12 px-4"
@@ -168,7 +181,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 />
               </Field>
             )}
-            <Field label="Email" htmlFor="email">
+            <Field label="Email" htmlFor="email" compact={signup}>
               <input
                 id="email"
                 className="input h-12 px-4"
@@ -197,6 +210,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               }
               htmlFor="password"
               hint={signup ? "At least 8 characters." : undefined}
+              compact={signup}
             >
               <div className="relative">
                 <input
@@ -222,7 +236,50 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </Field>
 
             {signup && (
-              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted pt-1">
+              <Field
+                label="Confirm password"
+                htmlFor="confirm-password"
+                compact
+                hint={
+                  confirmPassword && password !== confirmPassword
+                    ? "Passwords do not match."
+                    : undefined
+                }
+                hintId="confirm-password-error"
+                hintTone="fail"
+              >
+                <div className="relative">
+                  <input
+                    id="confirm-password"
+                    className="input h-12 px-4 pr-16"
+                    type={showConfirmPw ? "text" : "password"}
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    aria-invalid={Boolean(confirmPassword && password !== confirmPassword)}
+                    aria-describedby={
+                      confirmPassword && password !== confirmPassword
+                        ? "confirm-password-error"
+                        : undefined
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPw((v) => !v)}
+                    className="absolute inset-y-0 right-2 my-auto h-8 rounded-full px-3 text-xs text-muted hover:text-ink"
+                    aria-label={showConfirmPw ? "Hide confirm password" : "Show confirm password"}
+                  >
+                    {showConfirmPw ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </Field>
+            )}
+
+            {signup && (
+              <label className="flex cursor-pointer items-start gap-3 text-sm text-muted pt-0.5">
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 accent-[#5ef088]"
@@ -254,9 +311,12 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
             <button
               type="submit"
-              className="btn btn-main w-full mt-3 min-h-[48px]"
+              className={`btn btn-main w-full ${signup ? "mt-2 min-h-[46px]" : "mt-3 min-h-[48px]"}`}
               disabled={
-                busy !== "" || !email || !password || (signup && (!name.trim() || !accept))
+                busy !== "" ||
+                !email ||
+                !password ||
+                (signup && (!name.trim() || !accept || !confirmPassword))
               }
             >
               {busy === "submit"
@@ -269,7 +329,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             </button>
           </form>
 
-          <div className="my-7 flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+          <div
+            className={`${signup ? "my-5" : "my-7"} flex items-center gap-3 text-xs text-muted`}
+            aria-hidden="true"
+          >
             <span className="h-px flex-1 bg-line" />
             or
             <span className="h-px flex-1 bg-line" />
@@ -277,7 +340,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
           <button
             type="button"
-            className="btn w-full min-h-[48px] gap-3 border border-line bg-surface text-ink hover:border-accent/50"
+            className={`btn w-full gap-3 border border-line bg-surface text-ink hover:border-accent/50 ${
+              signup ? "min-h-[46px]" : "min-h-[48px]"
+            }`}
             disabled={busy !== "" || (signup && !accept)}
             onClick={() => {
               setBusy("google");
@@ -295,7 +360,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
               : "By continuing with Google, you confirm Edge is decision support, not financial advice."}
           </p>
 
-          <p className="mt-8 text-center text-sm text-muted">
+          <p className={`${signup ? "mt-5" : "mt-6"} text-center text-sm text-muted`}>
             {signup ? "Already have an account? " : "New to Edge? "}
             <Link href={signup ? "/login" : "/signup"} className="text-ink underline-offset-4 hover:underline">
               {signup ? "Sign in" : "Create an account"}
@@ -329,20 +394,38 @@ function Field({
   label,
   htmlFor,
   hint,
+  hintId,
+  hintTone = "muted",
+  compact,
   children,
 }: {
   label: React.ReactNode;
   htmlFor: string;
   hint?: string;
+  hintId?: string;
+  hintTone?: "muted" | "fail";
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-2.5 block text-sm font-medium text-ink">
+      <label
+        htmlFor={htmlFor}
+        className={`${compact ? "mb-1.5" : "mb-2.5"} block text-sm font-medium text-ink`}
+      >
         {label}
       </label>
       {children}
-      {hint && <p className="mt-2 text-xs text-muted">{hint}</p>}
+      {hint && (
+        <p
+          id={hintId}
+          className={`${compact ? "mt-1.5" : "mt-2"} text-xs ${
+            hintTone === "fail" ? "text-fail" : "text-muted"
+          }`}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
