@@ -245,6 +245,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                     ? "Passwords do not match."
                     : undefined
                 }
+                hintId="confirm-password-error"
+                hintTone="fail"
               >
                 <div className="relative">
                   <input
@@ -257,6 +259,12 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm your password"
+                    aria-invalid={Boolean(confirmPassword && password !== confirmPassword)}
+                    aria-describedby={
+                      confirmPassword && password !== confirmPassword
+                        ? "confirm-password-error"
+                        : undefined
+                    }
                   />
                   <button
                     type="button"
@@ -386,12 +394,16 @@ function Field({
   label,
   htmlFor,
   hint,
+  hintId,
+  hintTone = "muted",
   compact,
   children,
 }: {
   label: React.ReactNode;
   htmlFor: string;
   hint?: string;
+  hintId?: string;
+  hintTone?: "muted" | "fail";
   compact?: boolean;
   children: React.ReactNode;
 }) {
@@ -404,7 +416,16 @@ function Field({
         {label}
       </label>
       {children}
-      {hint && <p className={`${compact ? "mt-1.5" : "mt-2"} text-xs text-muted`}>{hint}</p>}
+      {hint && (
+        <p
+          id={hintId}
+          className={`${compact ? "mt-1.5" : "mt-2"} text-xs ${
+            hintTone === "fail" ? "text-fail" : "text-muted"
+          }`}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
