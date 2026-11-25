@@ -313,8 +313,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             >
               {busy === "submit"
                 ? signup
-                  ? "Creating your account…"
-                  : "Signing in…"
+                ? "Creating your account…"
+                : "Signing in…"
                 : signup
                   ? "Create account"
                   : "Sign in"}
@@ -344,7 +344,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
             <GoogleMark className="h-4.5 w-4.5" />
             {busy === "google" ? "Opening Google…" : "Continue with Google"}
           </button>
-          <p className="mt-2 text-center text-xs text-muted">
+          <p className="mt-3 text-center text-xs leading-relaxed text-muted/80">
             {signup
               ? accept
                 ? "Google confirms your email, so there's no confirmation link."

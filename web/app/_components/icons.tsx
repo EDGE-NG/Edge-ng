@@ -211,3 +211,15 @@ export const IconSidebarExpand = ({ className = "h-4 w-4" }: P) => (
     <path d="M9 3v18M13 15l3-3-3-3" />
   </svg>
 );
+export const IconMonitor = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </svg>
+);
+export const IconSmartphone = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <rect x="5" y="2" width="14" height="20" rx="2" />
+    <path d="M12 18h.01" />
+  </svg>
+);
