@@ -238,6 +238,8 @@ export async function readImage(args: {
     {
       userId: args.userId,
       feature: "image_interpret",
+      // The evidence library reads images with OpenAI first (Daniel, 2026-11-26).
+      prefer: "openai",
       promptVersion: READ_PROMPT_VERSION,
       guard: {
         texts: (v) => [v.reading, v.why, v.problem, ...(Array.isArray(v.features) ? v.features.map(String) : [])],

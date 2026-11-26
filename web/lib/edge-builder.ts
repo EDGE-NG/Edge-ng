@@ -230,6 +230,10 @@ export async function buildFromConversation(args: {
     {
       userId: args.userId,
       feature: "plan_extract",
+      // Checklist creation uses Gemini first (Daniel, 2026-11-26). It answers
+      // in about 2 s; if it stalls, move on to the next provider quickly.
+      prefer: "google",
+      timeoutMs: 12_000,
       promptVersion: PLAN_PROMPT_VERSION,
       // REQ-LLM-12: Edge's own reply and questions never predict; phrases the
       // trader used themselves are theirs, so they are not flagged.

@@ -68,11 +68,27 @@ interface ProviderConfig {
   visionModel: string;
   /** Provider-specific request fields. */
   extraBody?: Record<string, unknown>;
+  /** Extra fields for text calls only (override extraBody). */
+  textExtraBody?: Record<string, unknown>;
   /** Output cap for image calls (thinking models need room before the answer). */
   visionMaxTokens?: number;
+  /** Used only by jobs that prefer it by name; other jobs skip it. */
+  preferredOnly?: boolean;
 }
 
 const PROVIDERS: ProviderConfig[] = [
+  {
+    // OpenAI: the evidence library asks for it first (prefer: "openai",
+    // Daniel 2026-11-26); other jobs skip it. The other providers stay as
+    // fallbacks if OpenAI fails.
+    name: "openai",
+    url: "https://api.openai.com/v1/chat/completions",
+    key: process.env.OPENAI_API_KEY,
+    textModel: process.env.OPENAI_MODEL || "gpt-4.1",
+    visionModel: process.env.OPENAI_VISION_MODEL || "gpt-4.1",
+    visionMaxTokens: 2048,
+    preferredOnly: true,
+  },
   {
     name: "groq",
     url: "https://api.groq.com/openai/v1/chat/completions",
@@ -88,10 +104,14 @@ const PROVIDERS: ProviderConfig[] = [
     name: "google",
     url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
     key: process.env.GEMINI_API_KEY,
-    textModel: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    // Checklist creation prefers this (Daniel, 2026-11-26). flash-lite with
+    // thinking off answered a plan in about 1.6 s in testing; the larger 3.x
+    // flash models took 20 to 90 s or were overloaded.
+    textModel: process.env.GEMINI_MODEL || "gemini-3.1-flash-lite",
     visionModel: process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash",
     // keep Gemini 2.5's built-in thinking short, so the answer fits and comes back fast
     extraBody: { reasoning_effort: "low" },
+    textExtraBody: { reasoning_effort: "none" },
     visionMaxTokens: 4096,
   },
   {
@@ -100,6 +120,20 @@ const PROVIDERS: ProviderConfig[] = [
     key: process.env.OPENROUTER_API_KEY,
     textModel: process.env.OPENROUTER_MODEL || "meta-llama/llama-3.3-70b-instruct",
     visionModel: process.env.OPENROUTER_VISION_MODEL || "google/gemini-2.5-flash",
+  },
+  {
+    // z.ai (Zhipu GLM), OpenAI-compatible. Images only, used only by a job
+    // that prefers it. glm-4.6v-flash is the free vision model; paid ones
+    // (glm-4.6v, glm-4.5v) need credit on the account.
+    name: "zai",
+    url: "https://api.z.ai/api/paas/v4/chat/completions",
+    key: process.env.ZAI_API_KEY,
+    textModel: "",
+    visionModel: process.env.ZAI_VISION_MODEL || "glm-4.6v-flash",
+    // answer straight away instead of thinking first, so the JSON fits and comes back fast
+    extraBody: { thinking: { type: "disabled" } },
+    visionMaxTokens: 2048,
+    preferredOnly: true,
   },
 ];
 
@@ -123,6 +157,8 @@ export interface AIOptions {
   /** Version of the prompt and output schema used, recorded on every run. */
   promptVersion?: string;
   timeoutMs?: number;
+  /** Try this provider first (by name); the others stay as fallbacks. */
+  prefer?: string;
 }
 
 function hasVision(messages: ChatMessage[]): boolean {
@@ -133,12 +169,16 @@ function hasVision(messages: ChatMessage[]): boolean {
 
 export async function chat(messages: ChatMessage[], opts: AIOptions = {}): Promise<AIResult> {
   const vision = hasVision(messages);
-  const candidates = PROVIDERS.filter((p) => p.key && (!vision || p.visionModel));
+  const candidates = PROVIDERS.filter(
+    (p) => p.key && (vision ? p.visionModel : p.textModel) && (!p.preferredOnly || p.name === opts.prefer)
+  ).sort(
+    (a, b) => Number(b.name === opts.prefer) - Number(a.name === opts.prefer)
+  );
   if (candidates.length === 0) {
     throw new Error(
       vision
-        ? "No vision-capable AI provider configured. Set GEMINI_API_KEY (or OPENROUTER_API_KEY)."
-        : "No AI provider configured. Set GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY."
+        ? "No vision-capable AI provider configured. Set OPENAI_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY."
+        : "No AI provider configured. Set OPENAI_API_KEY, GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY."
     );
   }
 
@@ -167,6 +207,7 @@ export async function chat(messages: ChatMessage[], opts: AIOptions = {}): Promi
           // trips OpenRouter's "can you afford this request" check on low credits.
           max_tokens: vision ? p.visionMaxTokens ?? 1024 : 4096,
           ...p.extraBody,
+          ...(vision ? {} : p.textExtraBody),
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });
