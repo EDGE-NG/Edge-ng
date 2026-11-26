@@ -78,6 +78,8 @@ export async function POST(req: Request) {
   const polarity = form.get("polarity");
   const note = String(form.get("note") ?? "").trim().slice(0, 1000) || null;
   const replaceId = String(form.get("replaceId") ?? "") || null;
+  // The trader painted over account details in the browser (Figma 74).
+  const hidden = form.get("hidden") === "1";
   const file = form.get("file");
 
   if (polarity !== "valid" && polarity !== "invalid") {
@@ -104,16 +106,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Choose a chart image to upload." }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "That image is over 10 MB. Export a smaller screenshot." }, { status: 413 });
+    return NextResponse.json({ error: "This file is too large. The limit is 10 MB.", code: "too_large" }, { status: 413 });
   }
   const raw = Buffer.from(await file.arrayBuffer());
   const info = sniffImage(raw); // by content, never by file name (EC-V3)
   if (!info) {
-    return NextResponse.json({ error: "That isn't a PNG, JPEG or WebP image." }, { status: 415 });
+    return NextResponse.json({ error: "This file type is not supported. Use a PNG or JPG screenshot.", code: "file_type" }, { status: 415 });
   }
   if (info.width < MIN_WIDTH || info.height < MIN_HEIGHT) {
     return NextResponse.json(
-      { error: `That image is ${info.width}×${info.height}. Use at least ${MIN_WIDTH}×${MIN_HEIGHT} so the candles are readable.` },
+      {
+        error: `That image is ${info.width}×${info.height}. Use at least ${MIN_WIDTH}×${MIN_HEIGHT} so the candles are readable.`,
+        code: "too_small",
+      },
       { status: 422 }
     );
   }
@@ -139,9 +144,17 @@ export async function POST(req: Request) {
       { status: 502 }
     );
   }
-  if (!reading.is_chart) {
+  if (!reading.is_chart || !reading.readable) {
     return NextResponse.json(
-      { error: reading.problem || "That doesn't look like a price chart. Upload a chart screenshot.", code: "not_chart" },
+      { error: reading.problem || "We could not read this chart.", code: "unreadable" },
+      { status: 422 }
+    );
+  }
+  // Account numbers, balances or names are never stored unless the trader
+  // has hidden them first (REQ-DT-2). Nothing was saved.
+  if (reading.sensitive_info && !hidden) {
+    return NextResponse.json(
+      { error: "We found what looks like an account number. Hide it, or choose another file.", code: "sensitive" },
       { status: 422 }
     );
   }
