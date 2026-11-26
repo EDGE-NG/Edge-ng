@@ -29,6 +29,10 @@ Additive only (nothing dropped or renamed), for the web app moving off its tempo
 
 Checklist alerts: `checklist_monitors` (markets a trader asked Edge to watch with a checklist), `alert_events` (each time the chart rules started passing; append-only except `read_at` and `deliveries`), `push_subscriptions` (browser and phone devices for Web Push), and `workspace_sessions.kind` (`trade` or `monitor`), so a monitor's background checks keep the same audit trail without touching the trader's own workspace session. **Apply it before deploying the web code that uses it**: the workspace now filters sessions by `kind`.
 
+## What `0006_audit_log_retention.sql` adds
+
+Audit log retention of 24 months, as the schema and the Privacy Policy say. The log stays append-only; the only exception is `purge_old_audit_log(limit)`, which deletes rows older than 24 months (oldest first) and is called by the daily job. Updates, and deleting anything younger than 24 months, are still refused by the database. Server only.
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.
