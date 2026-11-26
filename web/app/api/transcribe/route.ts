@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getUser, tooManyAttempts } from "@/lib/auth";
 import { recordRun } from "@/lib/ai";
 
@@ -18,7 +18,8 @@ interface Segment {
  * directly. Audio is not stored (PRD 9.5: deleted once transcribed).
  */
 export async function POST(req: Request) {
-  const user = await getUser();
+  // Read the recording while the session is checked, instead of one after the other.
+  const [user, form] = await Promise.all([getUser(), req.formData().catch(() => null)]);
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   if (!process.env.GROQ_API_KEY) {
     return NextResponse.json(
@@ -30,7 +31,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many voice notes this hour. Try typing." }, { status: 429 });
   }
 
-  const form = await req.formData().catch(() => null);
   const audio = form?.get("audio");
   if (!(audio instanceof File) || audio.size === 0) {
     return NextResponse.json({ error: "No recording received." }, { status: 400 });
@@ -73,6 +73,8 @@ export async function POST(req: Request) {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
       body: upstream,
+      // Groq transcribes a 30 s note in about 1 s; never leave the trader waiting on a stuck call.
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const detail = await res.text();
@@ -94,7 +96,10 @@ export async function POST(req: Request) {
       (s) => (s.avg_logprob ?? 0) < -0.7 || (s.no_speech_prob ?? 0) > 0.5
     );
     // tokens_in holds the audio length in seconds for speech-to-text runs
-    await recordRun({ userId: user.id, job: "transcribe", provider: "groq", model: MODEL, tokensIn: Math.round(data.duration ?? 0) });
+    // Log the run after the reply is sent, so the trader sees the text sooner.
+    after(() =>
+      recordRun({ userId: user.id, job: "transcribe", provider: "groq", model: MODEL, tokensIn: Math.round(data.duration ?? 0) })
+    );
     if (!/\p{L}/u.test(text)) {
       // empty, or only punctuation (what silence / background noise comes back as)
       return NextResponse.json({ error: "I didn't catch any words. Try again a little closer to the mic." }, { status: 422 });
