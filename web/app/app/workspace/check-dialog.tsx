@@ -261,6 +261,10 @@ export default function CheckDialog({
           <Outcome
             decision={decision}
             platform={platform}
+            side={side}
+            draft={draft}
+            instLabel={instLabel}
+            decimals={decimals}
             currentTf={tf}
             onShowTf={(t) => {
               onClose();
@@ -285,6 +289,30 @@ interface Execution {
   platform: string;
   orderId: string | null;
   summary?: string | null;
+  /** Demo: Edge acted as if it placed the order; nothing reached the platform. */
+  simulated?: boolean;
+}
+
+/**
+ * Until accounts can be connected, Edge acts as if it placed the order
+ * (decision, Daniel, 2026-11-26) so the full flow can be shown. It is always
+ * labelled Demo: Edge never tells a trader a real order exists when it doesn't.
+ */
+function simulateOrder(platform: string, side: "buy" | "sell", draft: TicketDraft, instLabel: string, decimals: number): Execution {
+  const id = crypto.getRandomValues(new Uint32Array(1))[0] % 100_000_000;
+  const kind =
+    draft.orderType === "market" ? "" : draft.orderType === "limit" ? " limit" : draft.orderType === "stop_limit" ? " stop limit" : " stop";
+  const size = draft.size != null ? `${draft.size} ${draft.sizeUnit === "lots" ? "lots " : ""}` : "";
+  const unit = draft.sizeUnit && draft.sizeUnit !== "lots" ? ` ${draft.sizeUnit}` : "";
+  const at = draft.entry != null ? draft.entry.toFixed(decimals) : "market";
+  const what = `${side === "buy" ? "Buy" : "Sell"}${kind} ${size}${instLabel}${unit}`;
+  return {
+    status: "placed",
+    platform: platform || "platform",
+    orderId: String(id).padStart(8, "0"),
+    summary: draft.orderType === "market" ? `${what}, filled at ${at}` : `${what} at ${at}, waiting to fill`,
+    simulated: true,
+  };
 }
 
 /**
@@ -309,12 +337,20 @@ function Placed({ approved, platform, execution }: { approved: boolean; platform
       {placedOnPlatform ? (
         <>
           <p className="text-[13px] leading-relaxed text-ink/85">
+            {execution?.simulated && (
+              <span className="mr-1.5 rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] font-medium text-muted">Demo</span>
+            )}
             Your trade has been placed on your {platform}.{approved ? "" : " It's in your journal as an override."}
           </p>
           <p className="text-xs text-muted tabular-nums">
             {execution?.summary ? `${execution.summary} · ` : ""}
             {execution?.orderId ? `Order #${execution.orderId}` : ""}
           </p>
+          {execution?.simulated && (
+            <p className="text-xs text-muted">
+              Demo order: Edge isn&apos;t connected to your {platform} yet, so nothing was sent. Place it on your {platform} yourself.
+            </p>
+          )}
         </>
       ) : (
         <p className="text-[13px] leading-relaxed text-ink/85">
@@ -329,11 +365,19 @@ function Placed({ approved, platform, execution }: { approved: boolean; platform
 function Outcome({
   decision,
   platform,
+  side,
+  draft,
+  instLabel,
+  decimals,
   currentTf,
   onShowTf,
 }: {
   decision: Decision;
   platform: string;
+  side: "buy" | "sell";
+  draft: TicketDraft;
+  instLabel: string;
+  decimals: number;
   currentTf: Timeframe;
   onShowTf: (t: Timeframe) => void;
 }) {
@@ -365,6 +409,8 @@ function Outcome({
       const d = await res.json().catch(() => ({}));
       if (d.overrides) setAllowance(d.overrides);
       if (d.execution) setExecution(d.execution as Execution);
+      // No connected account yet: act as if the order was placed, labelled Demo.
+      else if (res.ok && action === "placed") setExecution(simulateOrder(platform, side, draft, instLabel, decimals));
       if (!res.ok) {
         setMsg(d.error || "Couldn't save that.");
         if (d.code === "expired" || d.code === "price_moved") setResolution("expired");

@@ -18,7 +18,7 @@ import ChartView, { type Candle, type ChartHandle, type IndicatorSeries } from "
 import CheckDialog from "./check-dialog";
 import RulesPanel from "./rules-panel";
 import SessionStrip from "./session-strip";
-import { EdgeTicket, MtTicket, SpotTicket, ticketStyle } from "./tickets";
+import { PlatformTicket, ticketStyle } from "./tickets";
 import { TF_LABEL, TIMEFRAMES, type Instrument, type TicketDraft, type Timeframe, type View } from "./types";
 
 const ASSET_LABEL = { crypto: "Crypto", forex: "Forex", metals: "Metals", indices: "Indices" } as const;
@@ -264,7 +264,7 @@ export default function Workspace() {
 
   function choosePlatform(p: string) {
     setPlatform(p);
-    // Binance / Bybit tickets trade crypto
+    // Binance / Bybit / OKX tickets trade crypto
     if (ticketStyle(p) === "spot" && inst?.assetClass !== "crypto") {
       setAssetClass("crypto");
       setSymbol("BTCUSDT");
@@ -439,12 +439,8 @@ export default function Workspace() {
                         Switch to BTC/USDT
                       </button>
                     </section>
-                  ) : style === "mt" ? (
-                    <MtTicket key={`${platform}-${inst.symbol}`} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
-                  ) : style === "spot" ? (
-                    <SpotTicket key={`${platform}-${inst.symbol}`} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
                   ) : (
-                    <EdgeTicket key={`${platform}-${inst.symbol}`} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
+                    <PlatformTicket key={`${platform}-${inst.symbol}`} platform={platform} inst={inst} risk={view.risk} lastPrice={lastPrice} disabled={dialog != null} onDraft={onDraft} onSubmit={openCheck} />
                   )
                 )}
               </div>
