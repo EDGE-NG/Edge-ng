@@ -1,12 +1,14 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { purgeDueAccounts } from "@/lib/account-deletion";
+import { cleanupOldFrames } from "@/lib/frame-cleanup";
 
 /**
  * The daily account purge (PRD F13). A scheduler (cron-job.org, like the
  * alerts) calls this once a day with `Authorization: Bearer <CRON_SECRET>`.
  * It deletes every account whose 14-day grace period has ended: files first,
- * then the account and all its data. Not for browsers.
+ * then the account and all its data. It also deletes old chart pictures
+ * (lib/frame-cleanup.ts), so no second scheduler job is needed. Not for browsers.
  */
 export const maxDuration = 60;
 
@@ -20,7 +22,15 @@ function authorized(req: Request): boolean {
 
 async function run(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "Not authorized" }, { status: 401 });
-  return NextResponse.json(await purgeDueAccounts());
+  const accounts = await purgeDueAccounts();
+  let frames: { removed: number; failed: number } | { error: string };
+  try {
+    frames = await cleanupOldFrames();
+  } catch (err) {
+    console.error("[account/purge] frame cleanup failed:", err);
+    frames = { error: "frame cleanup failed" };
+  }
+  return NextResponse.json({ ...accounts, frames });
 }
 
 export const GET = run;
