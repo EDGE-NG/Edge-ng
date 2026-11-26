@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const password = String(body.password ?? "");
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
 
-  if (tooManyAttempts(`login:${email}`) || tooManyAttempts(`login-ip:${ip}`, 30)) {
+  if (await tooManyAttempts(`login:${email}`) || await tooManyAttempts(`login-ip:${ip}`, 30)) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a few minutes, then try again." },
       { status: 429, headers: { "Retry-After": "900" } }
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: NEUTRAL }, { status: 401 });
   }
 
-  clearAttempts(`login:${email}`);
+  await clearAttempts(`login:${email}`);
   // coming back within the grace period cancels a scheduled account deletion (PRD F13)
   const restored = await cancelScheduledDeletion(data.user.id);
   const p = await db.one<{ display_name: string | null }>(

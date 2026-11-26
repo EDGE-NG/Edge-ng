@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
-  if (tooManyAttempts(`stt:${user.id}`, 40, 60 * 60_000)) {
+  if (await tooManyAttempts(`stt:${user.id}`, 40, 60 * 60_000)) {
     return NextResponse.json({ error: "Too many voice notes this hour. Try typing." }, { status: 429 });
   }
 
