@@ -84,6 +84,18 @@ export async function removeObject(bucket: Bucket, key: string): Promise<void> {
   await admin().storage.from(bucket).remove([key]);
 }
 
+/**
+ * Delete several files from one bucket. Throws if Storage refuses, so the
+ * caller only forgets a file once it is really gone. Returns the keys removed
+ * (a key that was already missing is not listed).
+ */
+export async function removeObjects(bucket: Bucket, keys: string[]): Promise<string[]> {
+  if (keys.length === 0) return [];
+  const { data, error } = await admin().storage.from(bucket).remove(keys);
+  if (error) throw new Error(`storage remove failed (${bucket}): ${error.message}`);
+  return (data ?? []).map((f) => f.name);
+}
+
 /** All storage buckets that hold a trader's files. */
 export const USER_BUCKETS: Bucket[] = ["evidence", "frames"];
 
