@@ -64,24 +64,30 @@ export async function saveAlertPrefs(userId: string, prefs: AlertPrefs): Promise
 
 /* --------------------------------------------------------------- push --- */
 
+/**
+ * The contact push services get: must be https: or mailto: (web-push refuses
+ * anything else, e.g. http://localhost in development, and every push fails).
+ */
+export function vapidSubject(configured: string | undefined, app: string): string {
+  for (const s of [configured, app]) if (s && /^(https:|mailto:)/i.test(s.trim())) return s.trim();
+  return "https://edge.ng";
+}
+
 let vapidSet = false;
 function ensureVapid() {
   if (vapidSet) return;
-  webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT || appUrl(),
-    process.env.VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!
-  );
+  webpush.setVapidDetails(vapidSubject(process.env.VAPID_SUBJECT, appUrl()), process.env.VAPID_PUBLIC_KEY!, process.env.VAPID_PRIVATE_KEY!);
   vapidSet = true;
 }
 
 export async function sendPush(userId: string, msg: NotifyMessage): Promise<{ sent: number; failed: number }> {
   if (!pushConfigured()) return { sent: 0, failed: 0 };
-  ensureVapid();
   const subs = await db.all<{ id: string; endpoint: string; p256dh: string; auth: string }>(
     "SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
     userId
   );
+  if (!subs.length) return { sent: 0, failed: 0 };
+  ensureVapid();
   const payload = JSON.stringify({ title: msg.title, body: msg.body, url: msg.path, tag: msg.tag });
   let sent = 0;
   let failed = 0;
@@ -157,7 +163,13 @@ export async function notifyUser(
 ): Promise<{ push: { sent: number; failed: number } | "off"; email: "sent" | "failed" | "off" }> {
   const prefs = await alertPrefs(userId);
   const [push, email] = await Promise.all([
-    prefs.push ? sendPush(userId, msg) : Promise.resolve("off" as const),
+    // A push error never stops the email.
+    prefs.push
+      ? sendPush(userId, msg).catch((err) => {
+          console.error("[notify] push failed:", err);
+          return { sent: 0, failed: 1 };
+        })
+      : Promise.resolve("off" as const),
     prefs.email ? sendEmail(userId, msg) : Promise.resolve("off" as const),
   ]);
   return { push, email };

@@ -142,7 +142,7 @@ The trader picks markets (e.g. Gold, Nasdaq 100) for Edge to watch with an appro
 
 Without a scheduler, alerts only run when the trader presses **Check now**.
 
-**2. Browser and phone notifications (Web Push).** Generate keys once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. `VAPID_SUBJECT` is a contact URL or `mailto:` address (defaults to the app URL). Works in Chrome, Edge, Firefox and Android; on iPhone only after the trader adds Edge to the Home Screen (iOS 16.4+).
+**2. Browser and phone notifications (Web Push).** Generate keys once with `npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. `VAPID_SUBJECT` is an `https:` URL or `mailto:` address (an `http://` value such as localhost is ignored; it falls back to the app URL when that is https, else https://edge.ng). Works in Chrome, Edge, Firefox and Android; on iPhone only after the trader adds Edge to the Home Screen (iOS 16.4+).
 
 **3. Email.** A [Resend](https://resend.com) API key in `RESEND_API_KEY`, and `ALERTS_EMAIL_FROM`, e.g. `Edge <alerts@edge.ng>` (the domain must be verified in Resend).
 

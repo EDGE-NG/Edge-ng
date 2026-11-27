@@ -59,7 +59,7 @@ export async function GET(req: Request) {
     ...(period === "week" ? [tz] : [tz, tz, tz, tz, tz])
   ))!;
 
-  const [totals, days, lastSessions, recent, rules] = await Promise.all([
+  const [totals, days, lastSessions, recent, rules, toConfirm] = await Promise.all([
     // Period totals, this period and the one before.
     db.one<{
       cur_followed: number;
@@ -139,6 +139,12 @@ export async function GET(req: Request) {
        WHERE c.user_id = ? AND c.status = 'active'`,
       user.id, user.id
     ),
+    // Task D5: placed trades whose stop loss or take profit Edge saw reached,
+    // waiting for the trader to confirm the outcome.
+    db.one<{ n: number }>(
+      `SELECT count(*)::int AS n FROM trades WHERE user_id = ? AND status = 'open' AND exit_price IS NOT NULL`,
+      user.id
+    ),
   ]);
 
   const t = totals!;
@@ -155,6 +161,7 @@ export async function GET(req: Request) {
     sessions: t.cur_sessions,
     brokeCount: t.cur_broke,
     rules: { total: rules.length, ready, needExamples: rules.length - ready },
+    tradesToConfirm: Number(toConfirm?.n ?? 0),
     lastSessions: dayStats(lastSessions).reverse(),
     days: dayStats(days),
     recent: recent.map((r) => ({
