@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
-import { db, json, uuid } from "@/lib/db";
+import { db, json, uuid, type Db } from "@/lib/db";
 import { findInstrument, getCandles } from "@/lib/market";
 import { overrideAllowance, resetText } from "@/lib/overrides";
+import { openTrade } from "@/lib/trade-watch";
 
 /**
  * POST { action, reason? } on a gate decision:
@@ -14,7 +15,8 @@ import { overrideAllowance, resetText } from "@/lib/overrides";
  *              the limit -> 429 override_limit
  *  placed   -> Phase 1: the trader placed it on their platform. Allowed for a
  *              still-valid approval (expiry + price tolerance, REQ-GT-3) or
- *              after an override.
+ *              after an override. Opens the trade, which Edge then watches
+ *              for its stop loss and take profit (Task D5, lib/trade-watch.ts).
  *  cancel   -> the trader changed their mind
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -40,10 +42,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!d) return NextResponse.json({ error: "Decision not found." }, { status: 404 });
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; reason?: string };
-  const resolve = (resolution: string, intentStatus: string) =>
+  const resolve = (resolution: string, intentStatus: string, also?: (t: Db) => Promise<void>) =>
     db.tx(async (t) => {
       await t.run("UPDATE gate_decisions SET resolution = ?, resolved_at = now() WHERE id = ?", resolution, d.id);
       await t.run("UPDATE trade_intents SET status = ? WHERE id = ?", intentStatus, d.intent_id);
+      if (also) await also(t);
     });
 
   if (body.action === "accept") {
@@ -114,7 +117,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const inst = findInstrument(d.instrument);
       if (inst) {
         try {
-          const c = await getCandles(inst, "1m", 2);
+          // same request as the chart, so the price usually comes from its cache (5 s)
+          const c = await getCandles(inst, "1m", 300);
           const p = c[c.length - 1].close;
           if (Math.abs(p - d.reference_price) > d.price_tolerance) {
             await resolve("expired", "expired");
@@ -128,7 +132,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
     }
-    await resolve("placed", "placed");
+    // Open the trade so Edge can watch its stop loss and take profit (Task D5).
+    await resolve("placed", "placed", (t) => openTrade(t, d.id, user.id));
     return NextResponse.json({ ok: true, resolution: "placed" });
   }
 

@@ -49,6 +49,8 @@ interface DashboardData {
   sessions: number;
   brokeCount: number;
   rules: { total: number; ready: number; needExamples: number };
+  /** Placed trades that reached a stop loss or take profit, waiting to be confirmed (Task D5). */
+  tradesToConfirm: number;
   lastSessions: DayStat[];
   days: DayStat[];
   recent: RecentTrade[];
@@ -146,6 +148,20 @@ export default function DashboardView() {
           <Skeleton />
         ) : (
           <div className={`space-y-4 transition-opacity ${loading ? "opacity-60" : ""}`} aria-busy={loading}>
+            {data.tradesToConfirm > 0 && (
+              <Link
+                href="/app/journal"
+                className="flex items-center justify-between gap-3 rounded-xl border border-maybe/45 bg-warn-bg/40 px-4 py-3 text-sm text-ink transition hover:bg-warn-bg/60"
+              >
+                <span className="flex items-center gap-2.5">
+                  <IconAlertCircle className="h-4 w-4 text-maybe" />
+                  {data.tradesToConfirm === 1
+                    ? "1 trade reached its stop loss or take profit. Confirm how it ended."
+                    : `${data.tradesToConfirm} trades reached their stop loss or take profit. Confirm how they ended.`}
+                </span>
+                <IconChevronRight className="h-4 w-4 text-muted" />
+              </Link>
+            )}
             {/* Stat cards */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <StatCard icon={<IconShield />} label="Plan adherence" value={data.adherence == null ? "–" : `${data.adherence}%`}>
