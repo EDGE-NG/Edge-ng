@@ -6,7 +6,9 @@ import AppFrame from "../../_components/app-frame";
 import { IconBook, IconCheck, IconRetry, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 import MonthReview from "./month-review";
+import { OutcomeBadge, TradeOutcome } from "../../_components/trade-outcome";
 import { handleSessionExpired } from "@/lib/client-auth";
+import type { TradeView } from "@/lib/outcome";
 
 interface OverrideInfo {
   id: string;
@@ -68,6 +70,8 @@ interface JournalEntry {
   userNotes: string;
   lessons: string;
   executionQuality: string | null;
+  /** Task D5: the placed trade Edge watches, and how it ended. */
+  trade: TradeView | null;
 }
 
 export default function JournalView() {
@@ -95,7 +99,13 @@ export default function JournalView() {
               map[e.id] = { notes: e.userNotes || "", lessons: e.lessons || "", saving: false, saved: false };
             }
             setNotesState(map);
-            if (data.entries?.length > 0) {
+            // An alert links to /app/journal?trade=<decision id>: open that trade.
+            const linked = new URLSearchParams(window.location.search).get("trade");
+            const target = (data.entries as JournalEntry[] | undefined)?.find((e) => e.id === linked);
+            if (target) {
+              setExpandedId(target.id);
+              requestAnimationFrame(() => document.getElementById(`entry-${target.id}`)?.scrollIntoView({ block: "start" }));
+            } else if (data.entries?.length > 0) {
               setExpandedId(data.entries[0].id);
             }
           }
@@ -247,6 +257,7 @@ export default function JournalView() {
               return (
                 <div
                   key={entry.id}
+                  id={`entry-${entry.id}`}
                   className={`card overflow-hidden transition ${
                     isExpanded ? "ring-1 ring-line" : "hover:border-line/80"
                   }`}
@@ -317,6 +328,13 @@ export default function JournalView() {
                           Placed
                         </span>
                       )}
+                      {entry.trade?.state === "hit" && (
+                        <span className="flex items-center gap-1.5 rounded-full bg-warn-bg px-2.5 py-1 text-xs font-medium text-maybe">
+                          <IconRetry className="h-3.5 w-3.5" />
+                          Confirm outcome
+                        </span>
+                      )}
+                      {entry.trade?.state === "closed" && <OutcomeBadge trade={entry.trade} />}
 
                       <span className="ml-1 text-xs text-muted">
                         {isExpanded ? "Collapse ▲" : "Details ▼"}
@@ -447,6 +465,17 @@ export default function JournalView() {
                               );
                             })}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Task D5: confirm, close or see the outcome of a placed trade */}
+                      {entry.resolution === "placed" && (
+                        <div className="mb-6">
+                          <TradeOutcome
+                            decisionId={entry.id}
+                            trade={entry.trade}
+                            onChange={(t) => setEntries((prev) => prev.map((x) => (x.id === entry.id ? { ...x, trade: t } : x)))}
+                          />
                         </div>
                       )}
 

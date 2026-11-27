@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { getUser } from "@/lib/auth";
 import { db, json } from "@/lib/db";
+import { toTradeView } from "@/lib/outcome";
+import { watchTrades } from "@/lib/trade-watch";
 
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  // Look for reached stop losses and take profits first, so the journal is up to date
+  // even between scheduler runs (Task D5). Best effort: the journal loads either way.
+  await watchTrades({ userId: user.id, budgetMs: 4_000 }).catch((err) => console.error("[journal] trade watch failed:", err));
 
   const rows = await db.all<{
     id: string;
@@ -30,6 +36,14 @@ export async function GET() {
     user_notes: string | null;
     lessons: string | null;
     execution_quality: string | null;
+    trade_id: string | null;
+    trade_status: "open" | "closed" | "cancelled" | null;
+    pnl_minor: number | null;
+    currency: string | null;
+    exit_price: number | null;
+    outcome_r: number | null;
+    trade_notes: string | null;
+    closed_at: string | null;
   }>(
     `SELECT
        d.id,
@@ -54,11 +68,23 @@ export async function GET() {
        j.id AS journal_id,
        j.user_notes,
        j.lessons,
-       j.execution_quality
+       j.execution_quality,
+       t.id AS trade_id,
+       t.status AS trade_status,
+       t.pnl_minor,
+       t.currency,
+       t.exit_price,
+       t.outcome_r,
+       t.notes AS trade_notes,
+       t.closed_at
      FROM gate_decisions d
      JOIN trade_intents i ON i.id = d.intent_id
      LEFT JOIN overrides o ON o.decision_id = d.id
      LEFT JOIN journal_entries j ON j.decision_id = d.id
+     LEFT JOIN LATERAL (
+       SELECT id, status, pnl_minor, currency, exit_price, outcome_r, notes, closed_at FROM trades
+       WHERE decision_id = d.id AND user_id = d.user_id ORDER BY created_at LIMIT 1
+     ) t ON true
      WHERE d.user_id = ?
      ORDER BY d.decided_at DESC`,
     user.id
@@ -92,6 +118,23 @@ export async function GET() {
     userNotes: r.user_notes ?? "",
     lessons: r.lessons ?? "",
     executionQuality: r.execution_quality ?? null,
+    // Task D5: the placed trade Edge watches, and how it ended.
+    trade: r.trade_id
+      ? toTradeView({
+          id: r.trade_id,
+          side: r.side as "buy" | "sell",
+          status: r.trade_status ?? "open",
+          entry_price: r.entry_price,
+          stop_price: r.stop_price,
+          target_price: r.target_price,
+          exit_price: r.exit_price,
+          outcome_r: r.outcome_r,
+          pnl_minor: r.pnl_minor,
+          currency: r.currency,
+          notes: r.trade_notes,
+          closed_at: r.closed_at,
+        })
+      : null,
   }));
 
   return NextResponse.json({ entries });

@@ -261,6 +261,7 @@ export default function CheckDialog({
           <Outcome
             decision={decision}
             platform={platform}
+            watched={draft.stop != null || draft.target != null}
             currentTf={tf}
             onShowTf={(t) => {
               onClose();
@@ -293,7 +294,18 @@ interface Execution {
  * Until accounts can be connected no order is sent, so Edge says what really
  * happened (the trade is recorded) instead of claiming a placed order.
  */
-function Placed({ approved, platform, execution }: { approved: boolean; platform: string; execution: Execution | null }) {
+function Placed({
+  approved,
+  platform,
+  execution,
+  watched,
+}: {
+  approved: boolean;
+  platform: string;
+  execution: Execution | null;
+  /** The ticket had a stop loss or take profit for Edge to watch (Task D5). */
+  watched: boolean;
+}) {
   const placedOnPlatform = execution?.status === "placed";
   const box = approved ? "border-accent/45 bg-pass-bg" : "border-maybe/45 bg-warn-bg";
   const tone = approved ? "text-accent" : "text-maybe";
@@ -322,6 +334,11 @@ function Placed({ approved, platform, execution }: { approved: boolean; platform
           account is connected.
         </p>
       )}
+      {watched && (
+        <p className="text-xs leading-relaxed text-ink/70">
+          Edge will watch your stop loss and take profit, and ask you to confirm the outcome when the price reaches one.
+        </p>
+      )}
     </div>
   );
 }
@@ -329,11 +346,13 @@ function Placed({ approved, platform, execution }: { approved: boolean; platform
 function Outcome({
   decision,
   platform,
+  watched,
   currentTf,
   onShowTf,
 }: {
   decision: Decision;
   platform: string;
+  watched: boolean;
   currentTf: Timeframe;
   onShowTf: (t: Timeframe) => void;
 }) {
@@ -443,7 +462,7 @@ function Outcome({
 
       <div className="mt-4">
         {resolution === "placed" ? (
-          <Placed approved={decision.result === "approved"} platform={execution?.platform || platform} execution={execution} />
+          <Placed approved={decision.result === "approved"} platform={execution?.platform || platform} execution={execution} watched={watched} />
         ) : resolution === "accepted_denial" ? (
           <p className="text-sm text-ink/80">Not taken. That decision is recorded in your journal.</p>
         ) : resolution === "cancelled" ? (
