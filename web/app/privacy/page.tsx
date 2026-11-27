@@ -107,7 +107,9 @@ export default function PrivacyPage() {
 
       <Section title="5. How long we keep it">
         <p>
-          We keep your data while you have an account. When you delete your account, you are signed out and have 14
+          We keep your data while you have an account, except chart captures: we delete a capture after 7 days if no
+          trade check used it, and every capture after 90 days (the price data and results behind each check stay in
+          your journal). When you delete your account, you are signed out and have 14
           days to change your mind: signing in again cancels the deletion. After 14 days we delete your account and
           all the data linked to it, including your uploaded images and chart captures. We keep a short record that
           an account was deleted (its email address and the date) for up to 24 months, for security and to handle
