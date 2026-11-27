@@ -223,3 +223,22 @@ export const IconSmartphone = ({ className = "h-4 w-4" }: P) => (
     <path d="M12 18h.01" />
   </svg>
 );
+export const IconUser = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+  </svg>
+);
+export const IconCreditCard = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <rect x="2" y="5" width="20" height="14" rx="2" />
+    <path d="M2 10h20" />
+  </svg>
+);
+export const IconDatabase = ({ className = "h-4 w-4" }: P) => (
+  <svg {...base} className={className}>
+    <ellipse cx="12" cy="5" rx="8" ry="3" />
+    <path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+    <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+  </svg>
+);
