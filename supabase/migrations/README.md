@@ -36,6 +36,28 @@ Checklist alerts: `checklist_monitors` (markets a trader asked Edge to watch wit
 
 Audit log retention of 24 months, as the schema and the Privacy Policy say. The log stays append-only; the only exception is `purge_old_audit_log(limit)`, which deletes rows older than 24 months (oldest first) and is called by the daily job. Updates, and deleting anything younger than 24 months, are still refused by the database. Server only.
 
+## What `0007_ai_usage_views.sql` adds
+
+Read-only AI usage and cost summaries of `llm_runs`, in a private `ops` schema (not exposed through the API; browsers can't read it):
+
+- `ops.ai_usage_daily`: per day, job, provider and model: runs, timeouts, errors, average and p95 time, tokens, voice seconds, users, estimated cost.
+- `ops.ai_usage_monthly`: the same per month, provider and model.
+- `ops.ai_usage_top_users`: the 50 heaviest users over the last 30 days (to spot abuse or a runaway loop).
+- `ops.llm_prices`: one row per provider and model, in US dollar micros (1 USD = 1,000,000) per million tokens, or per audio hour for speech-to-text. **Fill it in from each provider's pricing page**; a summary row shows no cost until every model in it has a price. For a free tier, enter 0.
+
+To read: Supabase → **SQL Editor**, e.g. `select * from ops.ai_usage_daily limit 50;`, or **Table Editor** → schema `ops`.
+
+To add a price (example: $0.10 in and $0.40 out per million tokens):
+
+```sql
+insert into ops.llm_prices (provider, model, usd_micros_per_mtok_in, usd_micros_per_mtok_out, note)
+values ('google', 'gemini-3.1-flash-lite', 100000, 400000, 'pricing page, 2026-11')
+on conflict (provider, model) do update
+  set usd_micros_per_mtok_in = excluded.usd_micros_per_mtok_in,
+      usd_micros_per_mtok_out = excluded.usd_micros_per_mtok_out,
+      note = excluded.note, updated_at = now();
+```
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.
