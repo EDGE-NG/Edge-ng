@@ -8,6 +8,7 @@ import Dropdown from "../../_components/dropdown";
 import {
   IconBell,
   IconCheck,
+  IconCheckCircle,
   IconCreditCard,
   IconDatabase,
   IconLogout,
@@ -20,6 +21,7 @@ import {
   IconUser,
   IconX,
 } from "../../_components/icons";
+import { ChangePasswordModal, ConfirmItIsYouModal } from "./security-modals";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
 import {
@@ -102,6 +104,12 @@ export default function SettingsView() {
 
   // Export State
   const [exporting, setExporting] = useState(false);
+
+  // Change Password Flow State (Task M6: Figma 80, 82, 83)
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [showChangePwModal, setShowChangePwModal] = useState(false);
+  const [verifiedPassword, setVerifiedPassword] = useState("");
+  const [passwordChangedBanner, setPasswordChangedBanner] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -636,9 +644,34 @@ export default function SettingsView() {
               </>
             )}
 
-            {/* Tab 2: Security (Figma 87) */}
+            {/* Tab 2: Security (Figma 80, 82, 83, 87) */}
             {tab === "security" && (
               <>
+                {passwordChangedBanner && (
+                  <div
+                    role="status"
+                    className="flex items-start justify-between gap-3 rounded-2xl border border-pass/35 bg-pass-bg px-5 py-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <IconCheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-pass" />
+                      <div>
+                        <div className="text-sm font-semibold text-ink">Password changed</div>
+                        <p className="mt-0.5 text-xs text-muted">
+                          We signed you out of your other devices and sent you an email.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPasswordChangedBanner(false)}
+                      className="cursor-pointer text-muted hover:text-ink"
+                      aria-label="Dismiss"
+                    >
+                      <IconX className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
                 <section className="card p-6 sm:p-8">
                   <div>
                     <h3 className="text-base font-semibold text-ink">Sign in and two-step login</h3>
@@ -653,12 +686,16 @@ export default function SettingsView() {
                         <div className="text-sm font-medium text-ink">Password</div>
                         <p className="text-xs text-muted">Keep your account protected with a strong password.</p>
                       </div>
-                      <Link
-                        href="/forgot-password"
-                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerifiedPassword("");
+                          setShowReauthModal(true);
+                        }}
+                        className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
                       >
                         Change password
-                      </Link>
+                      </button>
                     </div>
 
                     <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1017,6 +1054,35 @@ export default function SettingsView() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Confirm It Is You Modal (Figma 82) */}
+        {showReauthModal && (
+          <ConfirmItIsYouModal
+            onClose={() => setShowReauthModal(false)}
+            onConfirmed={(pw) => {
+              setVerifiedPassword(pw);
+              setShowReauthModal(false);
+              setShowChangePwModal(true);
+            }}
+          />
+        )}
+
+        {/* Change Password Modal (Figma 83) */}
+        {showChangePwModal && (
+          <ChangePasswordModal
+            initialCurrentPassword={verifiedPassword}
+            onClose={() => {
+              setShowChangePwModal(false);
+              setVerifiedPassword("");
+            }}
+            onChanged={() => {
+              setShowChangePwModal(false);
+              setVerifiedPassword("");
+              setPasswordChangedBanner(true);
+              setSessions((prev) => prev.filter((item) => item.isCurrent));
+            }}
+          />
         )}
 
         {/* Delete Confirmation Modal */}
