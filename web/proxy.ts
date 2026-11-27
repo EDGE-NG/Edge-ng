@@ -54,11 +54,14 @@ export async function proxy(req: NextRequest) {
     return r;
   };
 
-  if (PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/")) && !signedIn) {
-    return redirect("/login");
+  const hasPending2FA = req.cookies.get("edge_2fa_pending")?.value === "1";
+
+  if (PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    if (!signedIn) return redirect("/login");
+    if (hasPending2FA) return redirect("/two-step/challenge");
   }
   if (AUTH_PAGES.includes(pathname) && signedIn) {
-    return redirect("/checklist");
+    return redirect(hasPending2FA ? "/two-step/challenge" : "/checklist");
   }
   return res;
 }

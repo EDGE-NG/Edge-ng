@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderQrSvg } from "./qr-svg";
 import {
   base32Decode,
+  consumeBackupCode,
   formatKey,
   generateBackupCodes,
   generateTotp,
@@ -61,6 +62,27 @@ describe("Two-Step Auth and Backup Codes (Task M2, Figma 3 & 4)", () => {
       const h2 = hashBackupCode("7h2k9qxd");
       expect(h1).toBe(h2);
       expect(h1).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it("enforces one-time use when consuming a backup code (Task M3)", () => {
+      const codes = [
+        { hash: hashBackupCode("7H2K-9QXD"), used: false },
+        { hash: hashBackupCode("M4TW-3RLC"), used: false },
+      ];
+
+      // First use succeeds (case- and hyphen-insensitive)
+      const first = consumeBackupCode(codes, "7h2k9qxd");
+      expect(first.matched).toBe(true);
+      expect(first.updatedCodes[0].used).toBe(true);
+      expect(first.updatedCodes[1].used).toBe(false);
+
+      // Second use of the same code fails
+      const second = consumeBackupCode(first.updatedCodes, "7H2K-9QXD");
+      expect(second.matched).toBe(false);
+
+      // Invalid code fails
+      const invalid = consumeBackupCode(first.updatedCodes, "XXXX-YYYY");
+      expect(invalid.matched).toBe(false);
     });
   });
 
