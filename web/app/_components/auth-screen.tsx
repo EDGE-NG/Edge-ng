@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import EdgeMark from "./edge-mark";
+import { BREACHED_PASSWORD_WARNING, useBreachedPassword } from "./use-breached-password";
 import { toast } from "./toaster";
 
 type Mode = "signin" | "signup";
@@ -44,6 +45,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [exists, setExists] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState<"" | "submit" | "google">("");
+  const breached = useBreachedPassword(password, signup);
   // an error passed back in the URL (Google sign-in); empty on the server
   const urlError = useSyncExternalStore(noSubscribe, readUrlError, () => "");
   const shownError = error || (notice ? "" : urlError);
@@ -209,7 +211,15 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                 </span>
               }
               htmlFor="password"
-              hint={signup ? "At least 8 characters." : undefined}
+              hint={
+                signup
+                  ? breached
+                    ? BREACHED_PASSWORD_WARNING
+                    : "At least 8 characters."
+                  : undefined
+              }
+              hintId={signup && breached ? "password-breach-warning" : undefined}
+              hintTone={signup && breached ? "warn" : "muted"}
               compact={signup}
             >
               <div className="relative">
@@ -223,6 +233,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={signup ? "Create a password" : "Your password"}
+                  aria-describedby={signup && breached ? "password-breach-warning" : undefined}
                 />
                 <button
                   type="button"
@@ -403,10 +414,12 @@ function Field({
   htmlFor: string;
   hint?: string;
   hintId?: string;
-  hintTone?: "muted" | "fail";
+  hintTone?: "muted" | "fail" | "warn";
   compact?: boolean;
   children: React.ReactNode;
 }) {
+  const toneCls =
+    hintTone === "fail" ? "text-fail" : hintTone === "warn" ? "text-maybe" : "text-muted";
   return (
     <div>
       <label
@@ -419,9 +432,8 @@ function Field({
       {hint && (
         <p
           id={hintId}
-          className={`${compact ? "mt-1.5" : "mt-2"} text-xs ${
-            hintTone === "fail" ? "text-fail" : "text-muted"
-          }`}
+          role={hintTone === "warn" ? "status" : undefined}
+          className={`${compact ? "mt-1.5" : "mt-2"} text-xs ${toneCls}`}
         >
           {hint}
         </p>
