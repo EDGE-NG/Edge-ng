@@ -3,24 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import EdgeMark from "@/app/_components/edge-mark";
+import { BREACHED_PASSWORD_WARNING, useBreachedPassword } from "@/app/_components/use-breached-password";
 
 const PASSWORD_MIN = 8;
-
-function EdgeMark({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 54 44" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="em-rp-g" x1="0" y1="0" x2="54" y2="44" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#5ef088" />
-          <stop offset="1" stopColor="#dcff3c" />
-        </linearGradient>
-      </defs>
-      <rect x="14" y="2" width="40" height="9" rx="4.5" fill="url(#em-rp-g)" />
-      <rect x="7" y="17" width="40" height="9" rx="4.5" fill="url(#em-rp-g)" />
-      <rect y="32" width="40" height="9" rx="4.5" fill="url(#em-rp-g)" />
-    </svg>
-  );
-}
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -32,6 +18,7 @@ export default function ResetPasswordPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const breached = useBreachedPassword(password, isAuthenticated);
 
   useEffect(() => {
     let alive = true;
@@ -174,6 +161,7 @@ export default function ResetPasswordPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter new password"
+                    aria-describedby={breached ? "reset-password-breach-warning" : undefined}
                     autoFocus
                   />
                   <button
@@ -185,7 +173,13 @@ export default function ResetPasswordPage() {
                     {showPw ? "Hide" : "Show"}
                   </button>
                 </div>
-                <p className="mt-1.5 text-xs text-muted">At least {PASSWORD_MIN} characters.</p>
+                {breached ? (
+                  <p id="reset-password-breach-warning" role="status" className="mt-1.5 text-xs text-maybe">
+                    {BREACHED_PASSWORD_WARNING}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-muted">At least {PASSWORD_MIN} characters.</p>
+                )}
               </div>
 
               <div>
