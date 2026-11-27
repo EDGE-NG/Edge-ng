@@ -10,22 +10,9 @@ import { authClient } from "./supabase";
 export const PASSWORD_MIN = 8;
 
 /* ------------------------------------------------- attempt limiter ------ */
-// In-memory, per key (email or IP): slows password guessing on one server.
-// Supabase Auth applies its own rate limits on top.
-const attempts = new Map<string, { count: number; resetAt: number }>();
-export function tooManyAttempts(key: string, max = 8, windowMs = 15 * 60_000): boolean {
-  const t = Date.now();
-  const entry = attempts.get(key);
-  if (!entry || entry.resetAt < t) {
-    attempts.set(key, { count: 1, resetAt: t + windowMs });
-    return false;
-  }
-  entry.count += 1;
-  return entry.count > max;
-}
-export function clearAttempts(key: string): void {
-  attempts.delete(key);
-}
+// Rate limits are shared by every server (lib/rate-limit.ts). Supabase Auth
+// applies its own limits on top.
+export { clearAttempts, tooManyAttempts } from "./rate-limit";
 
 export interface User {
   id: string;

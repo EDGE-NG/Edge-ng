@@ -29,6 +29,10 @@ Additive only (nothing dropped or renamed), for the web app moving off its tempo
 
 Checklist alerts: `checklist_monitors` (markets a trader asked Edge to watch with a checklist), `alert_events` (each time the chart rules started passing; append-only except `read_at` and `deliveries`), `push_subscriptions` (browser and phone devices for Web Push), and `workspace_sessions.kind` (`trade` or `monitor`), so a monitor's background checks keep the same audit trail without touching the trader's own workspace session. **Apply it before deploying the web code that uses it**: the workspace now filters sessions by `kind`.
 
+## What `0005_rate_limits.sql` adds
+
+`rate_limits`, one counter per key for the sign-in, sign-up, password reset, upload and voice limits, plus `rate_limit_hit(key, window_ms)`, which counts one attempt atomically. The limits used to live in each server's memory, so on Vercel every server copy counted on its own. Keys are SHA-256 hashes, never an email or IP. Server only (row-level security on, no policies). Expired rows are removed by the daily job. **Apply it before deploying the web code that uses it**; until then the web code falls back to the old per-server counter.
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.
