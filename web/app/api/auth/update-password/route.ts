@@ -33,13 +33,16 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     password?: string;
     currentPassword?: string;
+    minLength?: number;
+    signOutOthers?: boolean;
   };
   const password = String(body.password ?? "");
   const currentPassword = String(body.currentPassword ?? "");
+  const requiredMin = body.minLength === 12 ? 12 : PASSWORD_MIN;
 
-  if (password.length < PASSWORD_MIN) {
+  if (password.length < requiredMin) {
     return NextResponse.json(
-      { error: `Password must be at least ${PASSWORD_MIN} characters long.` },
+      { error: `Password must be at least ${requiredMin} characters long.` },
       { status: 400 }
     );
   }
@@ -95,7 +98,13 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true });
+    let signedOutOthers = false;
+    if (!isRecovery || body.signOutOthers) {
+      const { error: signOutErr } = await supabase.auth.signOut({ scope: "others" });
+      if (!signOutErr) signedOutOthers = true;
+    }
+
+    return NextResponse.json({ ok: true, signedOutOthers });
   } catch (err) {
     console.error("[update-password] Unexpected error:", err);
     return NextResponse.json({ error: "Failed to update password. Please try again." }, { status: 500 });
