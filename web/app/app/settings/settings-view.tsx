@@ -21,7 +21,7 @@ import {
   IconUser,
   IconX,
 } from "../../_components/icons";
-import { ChangePasswordModal, ConfirmItIsYouModal } from "./security-modals";
+import { ChangeEmailModal, ChangePasswordModal, ConfirmItIsYouModal } from "./security-modals";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
 import {
@@ -110,6 +110,9 @@ export default function SettingsView() {
   const [showChangePwModal, setShowChangePwModal] = useState(false);
   const [verifiedPassword, setVerifiedPassword] = useState("");
   const [passwordChangedBanner, setPasswordChangedBanner] = useState(false);
+
+  // Change Email Flow State (Task M7: Figma 81)
+  const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -495,9 +498,13 @@ export default function SettingsView() {
                             <label htmlFor="profile-email" className="block text-xs font-medium text-ink">
                               Email
                             </label>
-                            <span className="text-[11px] font-medium text-muted" title="Email change coming in M7">
-                              Verified
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowChangeEmailModal(true)}
+                              className="cursor-pointer text-[11px] font-medium text-[#0f824e] hover:underline dark:text-accent"
+                            >
+                              Change
+                            </button>
                           </div>
                           <div className="mt-1.5 flex h-10 items-center justify-between rounded-xl border border-line bg-panel/60 px-3">
                             <input
@@ -1081,6 +1088,18 @@ export default function SettingsView() {
               setVerifiedPassword("");
               setPasswordChangedBanner(true);
               setSessions((prev) => prev.filter((item) => item.isCurrent));
+            }}
+          />
+        )}
+
+        {/* Change Email Modal (Figma 81) */}
+        {showChangeEmailModal && (
+          <ChangeEmailModal
+            onClose={() => setShowChangeEmailModal(false)}
+            onChanged={(updatedEmail) => {
+              setEmail(updatedEmail);
+              setShowChangeEmailModal(false);
+              toast.success("Your email address has been updated.");
             }}
           />
         )}
