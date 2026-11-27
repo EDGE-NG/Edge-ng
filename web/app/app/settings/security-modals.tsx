@@ -374,3 +374,257 @@ export function ChangePasswordModal({
     </div>
   );
 }
+
+/**
+ * Figma 81: "Change your email" modal.
+ * Step 1: New email + current password -> sends 6-digit code to new address.
+ * Step 2: Enter 6-digit code -> confirms email change.
+ */
+export function ChangeEmailModal({
+  onClose,
+  onChanged,
+}: {
+  onClose: () => void;
+  onChanged: (updatedEmail: string) => void;
+}) {
+  const [step, setStep] = useState<"request" | "verify">("request");
+  const [newEmail, setNewEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSendCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newEmail.trim() || !currentPassword || busy) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/change-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newEmail: newEmail.trim(), currentPassword }),
+      });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Could not send code.");
+      }
+      setNewEmail(data.newEmail || newEmail.trim().toLowerCase());
+      setStep("verify");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleVerifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    const cleanCode = code.replace(/\D/g, "").slice(0, 6);
+    if (cleanCode.length !== 6 || busy) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/verify-email-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newEmail, code: cleanCode }),
+      });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Invalid verification code.");
+      }
+      onChanged(data.email || newEmail);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="change-email-title"
+    >
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 id="change-email-title" className="text-base font-semibold text-ink">
+              {step === "request" ? "Change your email" : "Confirm your new email"}
+            </h4>
+            <p className="mt-1 text-xs text-muted">
+              {step === "request"
+                ? "We will send a code to the new address to confirm it."
+                : `We sent a 6 digit code to ${newEmail}. Enter it below to finish.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer text-muted hover:text-ink"
+            aria-label="Close"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+
+        {step === "request" ? (
+          <form onSubmit={handleSendCode} className="mt-5 space-y-4">
+            <div>
+              <label htmlFor="ce-new-email" className="block text-xs font-medium text-ink">
+                New email
+              </label>
+              <input
+                id="ce-new-email"
+                type="email"
+                required
+                autoFocus
+                value={newEmail}
+                onChange={(e) => {
+                  setNewEmail(e.target.value);
+                  setError("");
+                }}
+                placeholder="new@example.com"
+                className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink placeholder:text-muted/60 focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="ce-password" className="block text-xs font-medium text-ink">
+                Current password
+              </label>
+              <div className="relative mt-1.5">
+                <input
+                  id="ce-password"
+                  type={showPw ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  value={currentPassword}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    setError("");
+                  }}
+                  placeholder="Your current password"
+                  className="h-11 w-full rounded-xl border border-line bg-surface px-3.5 pr-16 text-sm text-ink placeholder:text-muted/60 focus:border-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute inset-y-0 right-2 my-auto h-7 cursor-pointer rounded-full px-2.5 text-xs font-medium text-[#0f824e] hover:underline dark:text-accent"
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                >
+                  {showPw ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            {/* Info banner (Figma 81) */}
+            <div className="flex items-center gap-2.5 rounded-xl border border-pass/30 bg-pass-bg px-3.5 py-2.5 text-xs text-pass">
+              <IconCheckCircle className="h-4 w-4 shrink-0" />
+              <span>Your email only changes after you enter the code.</span>
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3 py-2 text-xs text-fail">
+                {error}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={busy}
+                className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!newEmail.trim() || !currentPassword || busy}
+                className="h-9 cursor-pointer rounded-xl bg-[#0f824e] px-4 text-xs font-semibold text-white transition hover:bg-[#0c6b40] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-accent dark:text-[#04110a] dark:hover:brightness-110"
+              >
+                {busy ? "Sending…" : "Send code"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} className="mt-5 space-y-4">
+            <div>
+              <label htmlFor="ce-code" className="block text-xs font-medium text-ink">
+                6 digit code
+              </label>
+              <input
+                id="ce-code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                required
+                autoFocus
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setError("");
+                }}
+                placeholder="Enter the 6 digit code"
+                className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-center font-mono text-base font-semibold tracking-widest text-ink placeholder:font-sans placeholder:tracking-normal placeholder:font-normal placeholder:text-muted/60 focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3 py-2 text-xs text-fail">
+                {error}
+              </p>
+            )}
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("request");
+                  setCode("");
+                  setError("");
+                }}
+                disabled={busy}
+                className="cursor-pointer text-xs font-medium text-muted hover:text-ink"
+              >
+                ← Back
+              </button>
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={busy}
+                  className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={code.length !== 6 || busy}
+                  className="h-9 cursor-pointer rounded-xl bg-[#0f824e] px-4 text-xs font-semibold text-white transition hover:bg-[#0c6b40] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-accent dark:text-[#04110a] dark:hover:brightness-110"
+                >
+                  {busy ? "Verifying…" : "Verify and change email"}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
