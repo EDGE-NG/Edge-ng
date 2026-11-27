@@ -17,7 +17,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (tooManyAttempts(`signup:${ip}`, 10)) {
+  if (await tooManyAttempts(`signup:${ip}`, 10)) {
     return NextResponse.json(
       { error: "Too many sign-up attempts. Try again in a few minutes." },
       { status: 429, headers: { "Retry-After": "900" } }
