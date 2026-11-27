@@ -11,7 +11,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export async function POST(req: Request) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-  if (tooManyAttempts(`reset:${ip}`, 6, 15 * 60_000)) {
+  if (await tooManyAttempts(`reset:${ip}`, 6, 15 * 60_000)) {
     return NextResponse.json(
       { error: "Too many password reset requests. Please wait a few minutes and try again." },
       { status: 429 }

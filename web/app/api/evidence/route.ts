@@ -67,7 +67,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  if (tooManyAttempts(`evidence:${user.id}`, 60, 60 * 60_000)) {
+  if (await tooManyAttempts(`evidence:${user.id}`, 60, 60 * 60_000)) {
     return NextResponse.json({ error: "That's a lot of uploads in an hour. Take a short break." }, { status: 429 });
   }
 

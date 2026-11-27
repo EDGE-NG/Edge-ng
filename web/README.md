@@ -115,6 +115,10 @@ Settings → Delete Account & Data doesn't delete at once (PRD F13; `lib/account
 
 **Scheduler:** on cron-job.org, add a second job like the alerts one, but with the URL `https://edge-ng.vercel.app/api/account/purge` and the schedule **once a day**.
 
+## Chart picture cleanup
+
+Each chart check saves a PNG in the `frames` bucket. To keep storage small, the same daily job (`/api/account/purge`, `lib/frame-cleanup.ts`) deletes pictures no Buy / Sell decision used once they are **7 days** old, and every picture once it is **90 days** old. Only the picture is deleted: the frame's candles, the rule checks and the decision stay in the database, so the journal still shows what Edge saw. The job's reply includes `frames: { removed, failed }`.
+
 ## Checklist alerts
 
 The trader picks markets (e.g. Gold, Nasdaq 100) for Edge to watch with an approved checklist (`/app/alerts`). On each new candle the server checks the checklist's hard-gate chart rules from its own price data, with the same rule check as the workspace (`lib/alerts.ts`). When they all pass, Edge stores an alert and sends a browser/phone notification and an email. An alert is not an approval: the trader checks the trade in the workspace and the gate decides. Tables: `supabase/migrations/0003_checklist_alerts.sql`.
