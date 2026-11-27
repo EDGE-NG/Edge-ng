@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconCheckCircle, IconX } from "../../_components/icons";
 import { handleSessionExpired } from "@/lib/client-auth";
 
@@ -621,6 +621,453 @@ export function ChangeEmailModal({
                   {busy ? "Verifying…" : "Verify and change email"}
                 </button>
               </div>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Figma 84 & 85: "Your backup codes" + "Generate new backup codes?" confirmation modal.
+ */
+export function BackupCodesModal({
+  onClose,
+  onUpdated,
+}: {
+  onClose: () => void;
+  onUpdated: (remaining: number, total: number) => void;
+}) {
+  const [view, setView] = useState<"list" | "confirm-regenerate">("list");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [codes, setCodes] = useState<{ code: string; used: boolean }[]>([]);
+  const [remaining, setRemaining] = useState(0);
+  const [total, setTotal] = useState(8);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/mfa/backup-codes");
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not load backup codes.");
+        if (alive) {
+          setCodes(data.codes || []);
+          setRemaining(data.remaining ?? 0);
+          setTotal(data.total ?? 8);
+          onUpdated(data.remaining ?? 0, data.total ?? 8);
+        }
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : "Could not load backup codes.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [onUpdated]);
+
+  async function handleCopy() {
+    const unused = codes.filter((c) => !c.used).map((c) => c.code);
+    if (!unused.length) return;
+    try {
+      await navigator.clipboard.writeText(unused.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  function handleDownload() {
+    const lines = codes.map((c, i) => `${i + 1}. ${c.code}${c.used ? " (used)" : ""}`);
+    const content = [
+      "Edge - Backup Codes",
+      `Remaining: ${remaining} of ${total}`,
+      "",
+      ...lines,
+      "",
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "edge-backup-codes.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleRegenerate() {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/mfa/backup-codes", { method: "POST" });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to generate new backup codes.");
+      setCodes(data.codes || []);
+      setRemaining(data.remaining ?? 8);
+      setTotal(data.total ?? 8);
+      onUpdated(data.remaining ?? 8, data.total ?? 8);
+      setView("list");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate new backup codes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (view === "confirm-regenerate") {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="regen-title"
+      >
+        <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h4 id="regen-title" className="text-base font-semibold text-ink">
+                Generate new backup codes?
+              </h4>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                Your {remaining} remaining codes stop working right away. You will see the new codes once, so save
+                them before you close the next screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="cursor-pointer text-muted hover:text-ink"
+              aria-label="Close"
+            >
+              <IconX className="h-4 w-4" />
+            </button>
+          </div>
+
+          {error && (
+            <p role="alert" className="mt-4 rounded-xl border border-fail/40 bg-err-bg px-3 py-2 text-xs text-fail">
+              {error}
+            </p>
+          )}
+
+          <div className="mt-6 flex justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              disabled={busy}
+              className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={busy}
+              className="h-9 cursor-pointer rounded-xl bg-[#0f824e] px-4 text-xs font-semibold text-white transition hover:bg-[#0c6b40] disabled:opacity-50 dark:bg-accent dark:text-[#04110a] dark:hover:brightness-110"
+            >
+              {busy ? "Generating…" : "Generate new codes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="backup-modal-title"
+    >
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 id="backup-modal-title" className="text-base font-semibold text-ink">
+              Your backup codes
+            </h4>
+            <p className="mt-1 text-xs text-muted">
+              {remaining} of {total} codes left. Each one works once.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer text-muted hover:text-ink"
+            aria-label="Close"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="py-10 text-center text-xs text-muted">Loading backup codes…</div>
+        ) : (
+          <>
+            <div className="mt-5 rounded-xl border border-line bg-panel/40 p-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 font-mono text-sm font-medium tracking-wide">
+                {codes.map((item, i) => (
+                  <span
+                    key={i}
+                    className={item.used ? "text-muted/60 line-through" : "text-ink select-all"}
+                  >
+                    {item.code}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2.5">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel"
+              >
+                Download
+              </button>
+            </div>
+
+            {error && (
+              <p role="alert" className="mt-3 rounded-xl border border-fail/40 bg-err-bg px-3 py-2 text-xs text-fail">
+                {error}
+              </p>
+            )}
+
+            <div className="mt-6 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setView("confirm-regenerate")}
+                className="cursor-pointer text-xs font-medium text-[#0f824e] hover:underline dark:text-accent"
+              >
+                Generate new codes
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-9 cursor-pointer rounded-xl bg-[#0f824e] px-5 text-xs font-semibold text-white transition hover:bg-[#0c6b40] dark:bg-accent dark:text-[#04110a] dark:hover:brightness-110"
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Figma 86: "Set up a new authenticator" modal.
+ */
+export function ChangeAuthenticatorModal({
+  onClose,
+  onChanged,
+}: {
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [factorId, setFactorId] = useState("");
+  const [secret, setSecret] = useState("");
+  const [formattedKey, setFormattedKey] = useState("");
+  const [qrSvg, setQrSvg] = useState("");
+  const [code, setCode] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/mfa/change-authenticator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        });
+        if (res.status === 401) {
+          handleSessionExpired();
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Could not start authenticator setup.");
+        if (alive) {
+          setFactorId(data.factorId || "");
+          setSecret(data.secret || "");
+          setFormattedKey(data.formattedKey || "");
+          setQrSvg(data.qrSvg || "");
+        }
+      } catch (err) {
+        if (alive) setError(err instanceof Error ? err.message : "Could not start setup.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function handleCopyKey() {
+    if (!formattedKey) return;
+    try {
+      await navigator.clipboard.writeText(formattedKey.replace(/\s+/g, ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  async function handleConfirm(e: React.FormEvent) {
+    e.preventDefault();
+    const clean = code.replace(/\D/g, "").slice(0, 6);
+    if (clean.length !== 6 || busy) return;
+
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/mfa/change-authenticator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm", factorId, secret, code: clean }),
+      });
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Invalid code.");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update authenticator.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-auth-title"
+    >
+      <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 id="new-auth-title" className="text-base font-semibold text-ink">
+              Set up a new authenticator
+            </h4>
+            <p className="mt-1 text-xs text-muted">
+              Your old authenticator stops working once you confirm.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer text-muted hover:text-ink"
+            aria-label="Close"
+          >
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="py-10 text-center text-xs text-muted">Generating new authenticator key…</div>
+        ) : (
+          <form onSubmit={handleConfirm} className="mt-5 space-y-4">
+            <div className="flex items-center gap-4">
+              <div
+                className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black p-1.5"
+                aria-label="New authenticator QR code"
+                dangerouslySetInnerHTML={{ __html: qrSvg }}
+              />
+              <ol className="space-y-1.5 text-xs text-ink/90">
+                <li>1. Open your authenticator app.</li>
+                <li>2. Scan this code.</li>
+                <li>3. Enter the 6 digit code it shows.</li>
+              </ol>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-line bg-panel/40 px-3.5 py-2.5">
+              <div>
+                <div className="text-[11px] text-muted">Cannot scan? Enter this key</div>
+                <div className="mt-0.5 font-mono text-xs font-semibold tracking-wider text-ink">
+                  {formattedKey}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyKey}
+                className="cursor-pointer text-xs font-medium text-[#0f824e] hover:underline dark:text-accent"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <div>
+              <label htmlFor="new-auth-code" className="block text-xs font-medium text-ink">
+                6 digit code
+              </label>
+              <input
+                id="new-auth-code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                required
+                autoFocus
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                  setError("");
+                }}
+                placeholder="Enter the code"
+                className="mt-1.5 h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink placeholder:text-muted/60 focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="rounded-xl border border-fail/40 bg-err-bg px-3 py-2 text-xs text-fail">
+                {error}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={busy}
+                className="h-9 cursor-pointer rounded-xl border border-line bg-surface px-4 text-xs font-medium text-ink transition hover:bg-panel disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={code.length !== 6 || busy}
+                className="h-9 cursor-pointer rounded-xl bg-[#0f824e] px-4 text-xs font-semibold text-white transition hover:bg-[#0c6b40] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-accent dark:text-[#04110a] dark:hover:brightness-110"
+              >
+                {busy ? "Confirming…" : "Confirm"}
+              </button>
             </div>
           </form>
         )}

@@ -21,7 +21,13 @@ import {
   IconUser,
   IconX,
 } from "../../_components/icons";
-import { ChangeEmailModal, ChangePasswordModal, ConfirmItIsYouModal } from "./security-modals";
+import {
+  BackupCodesModal,
+  ChangeAuthenticatorModal,
+  ChangeEmailModal,
+  ChangePasswordModal,
+  ConfirmItIsYouModal,
+} from "./security-modals";
 import { toast } from "../../_components/toaster";
 import { applyTheme, getStoredTheme, type Theme } from "../../_components/theme-toggle";
 import {
@@ -105,14 +111,41 @@ export default function SettingsView() {
   // Export State
   const [exporting, setExporting] = useState(false);
 
-  // Change Password Flow State (Task M6: Figma 80, 82, 83)
-  const [showReauthModal, setShowReauthModal] = useState(false);
+  // Change Password & M8 Security Tab Flow State
+  const [reauthPurpose, setReauthPurpose] = useState<null | "password" | "authenticator" | "backup-codes">(null);
   const [showChangePwModal, setShowChangePwModal] = useState(false);
+  const [showChangeAuthModal, setShowChangeAuthModal] = useState(false);
+  const [showBackupCodesModal, setShowBackupCodesModal] = useState(false);
   const [verifiedPassword, setVerifiedPassword] = useState("");
   const [passwordChangedBanner, setPasswordChangedBanner] = useState(false);
+  const [mfaStatus, setMfaStatus] = useState<{ authenticatorOn: boolean; remainingCodes: number; totalCodes: number }>({
+    authenticatorOn: true,
+    remainingCodes: 8,
+    totalCodes: 8,
+  });
 
   // Change Email Flow State (Task M7: Figma 81)
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/mfa/status");
+        if (res.ok && alive) {
+          const data = await res.json();
+          setMfaStatus({
+            authenticatorOn: Boolean(data.authenticatorOn),
+            remainingCodes: data.remainingCodes ?? 8,
+            totalCodes: data.totalCodes ?? 8,
+          });
+        }
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -697,7 +730,7 @@ export default function SettingsView() {
                         type="button"
                         onClick={() => {
                           setVerifiedPassword("");
-                          setShowReauthModal(true);
+                          setReauthPurpose("password");
                         }}
                         className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
                       >
@@ -708,32 +741,36 @@ export default function SettingsView() {
                     <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="text-sm font-medium text-ink">Authenticator app</div>
-                        <p className="text-xs text-muted">Use a 6-digit code from your authenticator app.</p>
+                        <p className="text-xs text-muted">Codes come from the app on your phone.</p>
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="rounded-full border border-pass/30 bg-pass-bg px-2.5 py-0.5 text-[11px] font-medium text-pass">
-                          On
+                          {mfaStatus.authenticatorOn ? "On" : "Required"}
                         </span>
-                        <Link
-                          href="/two-step"
-                          className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
+                        <button
+                          type="button"
+                          onClick={() => setReauthPurpose("authenticator")}
+                          className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
                         >
                           Change authenticator
-                        </Link>
+                        </button>
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="text-sm font-medium text-ink">Backup codes</div>
-                        <p className="text-xs text-muted">Single-use codes if you lose your phone.</p>
+                        <p className="text-xs text-muted">
+                          {mfaStatus.remainingCodes} of {mfaStatus.totalCodes} codes left. Each one works once.
+                        </p>
                       </div>
-                      <Link
-                        href="/two-step"
-                        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
+                      <button
+                        type="button"
+                        onClick={() => setReauthPurpose("backup-codes")}
+                        className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-surface px-3.5 text-xs font-medium text-ink transition hover:bg-panel"
                       >
                         View codes
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </section>
@@ -1064,14 +1101,43 @@ export default function SettingsView() {
         )}
 
         {/* Confirm It Is You Modal (Figma 82) */}
-        {showReauthModal && (
+        {reauthPurpose && (
           <ConfirmItIsYouModal
-            onClose={() => setShowReauthModal(false)}
+            onClose={() => setReauthPurpose(null)}
             onConfirmed={(pw) => {
-              setVerifiedPassword(pw);
-              setShowReauthModal(false);
-              setShowChangePwModal(true);
+              const purpose = reauthPurpose;
+              setReauthPurpose(null);
+              if (purpose === "password") {
+                setVerifiedPassword(pw);
+                setShowChangePwModal(true);
+              } else if (purpose === "authenticator") {
+                setShowChangeAuthModal(true);
+              } else if (purpose === "backup-codes") {
+                setShowBackupCodesModal(true);
+              }
             }}
+          />
+        )}
+
+        {/* Set Up a New Authenticator Modal (Figma 86) */}
+        {showChangeAuthModal && (
+          <ChangeAuthenticatorModal
+            onClose={() => setShowChangeAuthModal(false)}
+            onChanged={() => {
+              setShowChangeAuthModal(false);
+              setMfaStatus((prev) => ({ ...prev, authenticatorOn: true }));
+              toast.success("Authenticator app updated. Your old authenticator is no longer active.");
+            }}
+          />
+        )}
+
+        {/* Backup Codes Modal (Figma 84 & 85) */}
+        {showBackupCodesModal && (
+          <BackupCodesModal
+            onClose={() => setShowBackupCodesModal(false)}
+            onUpdated={(remaining, total) =>
+              setMfaStatus((prev) => ({ ...prev, remainingCodes: remaining, totalCodes: total }))
+            }
           />
         )}
 
