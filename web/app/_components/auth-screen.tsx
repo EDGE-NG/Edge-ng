@@ -107,6 +107,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       } catch {
         /* fallback to /checklist */
       }
+      if (d.requiresTwoStep) {
+        router.push(`/two-step/challenge?from=${encodeURIComponent(destination)}`);
+        return;
+      }
       router.push(destination);
       router.refresh();
     } catch (err) {

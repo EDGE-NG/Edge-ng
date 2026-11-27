@@ -110,6 +110,46 @@ export function verifyTotpCode(secret: string, code: string, window = 1): boolea
   return false;
 }
 
+export const TWO_STEP_PENDING_COOKIE = "edge_2fa_pending";
+
+export interface BackupCodeEntry {
+  hash: string;
+  used: boolean;
+  createdAt?: string;
+  usedAt?: string;
+}
+
+export interface TwoStepSettings {
+  enabled?: boolean;
+  factorId?: string | null;
+  secret?: string | null;
+  backupCodes?: BackupCodeEntry[];
+  enabledAt?: string;
+  acknowledged?: boolean;
+  acknowledgedAt?: string;
+}
+
+/**
+ * Checks an input backup code against stored hashed codes.
+ * Each backup code is single-use: if matched and unused, returns updated list with used=true.
+ */
+export function consumeBackupCode(
+  backupCodes: BackupCodeEntry[],
+  inputCode: string
+): { matched: boolean; updatedCodes: BackupCodeEntry[] } {
+  const clean = inputCode.trim();
+  if (!clean) return { matched: false, updatedCodes: backupCodes };
+  const targetHash = hashBackupCode(clean);
+  const idx = backupCodes.findIndex((c) => !c.used && c.hash === targetHash);
+  if (idx === -1) {
+    return { matched: false, updatedCodes: backupCodes };
+  }
+  const updatedCodes = backupCodes.map((c, i) =>
+    i === idx ? { ...c, used: true, usedAt: new Date().toISOString() } : c
+  );
+  return { matched: true, updatedCodes };
+}
+
 /**
  * Builds an otpauth:// URI for authenticator apps.
  */

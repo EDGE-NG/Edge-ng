@@ -5,6 +5,8 @@ import { db, uuid } from "@/lib/db";
 import { DISCLAIMER_VERSION, OAUTH_COOKIE } from "@/lib/legal";
 import { authClient } from "@/lib/supabase";
 import { safeTimeZone } from "@/lib/time";
+import { TWO_STEP_PENDING_COOKIE } from "@/lib/totp";
+import { getUserTwoStepConfig } from "@/lib/two-step";
 
 /**
  * GET /auth/callback?code=... -> Google (through Supabase) sends the trader
@@ -98,5 +100,19 @@ export async function GET(req: Request) {
   // coming back within the grace period cancels a scheduled account deletion (PRD F13)
   const restored = await cancelScheduledDeletion(user.id);
   const destination = safeNext ?? (restored ? "/checklist?notice=deletion_cancelled" : "/checklist");
+
+  const { enabled: twoStepEnabled } = await getUserTwoStepConfig(user.id, supabase);
+  if (twoStepEnabled) {
+    store.set(TWO_STEP_PENDING_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 30,
+    });
+    return NextResponse.redirect(
+      new URL(`/two-step/challenge?from=${encodeURIComponent(destination)}`, origin)
+    );
+  }
+  store.delete(TWO_STEP_PENDING_COOKIE);
   return NextResponse.redirect(new URL(destination, origin));
 }

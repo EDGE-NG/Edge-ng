@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { cancelScheduledDeletion } from "@/lib/account-deletion";
 import { clearAttempts, tooManyAttempts } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { authClient } from "@/lib/supabase";
+import { TWO_STEP_PENDING_COOKIE } from "@/lib/totp";
+import { getUserTwoStepConfig } from "@/lib/two-step";
 
 const NEUTRAL = "That email and password don't match. Check them and try again.";
 
@@ -43,8 +46,22 @@ export async function POST(req: Request) {
     "SELECT display_name FROM profiles WHERE user_id = ?",
     data.user.id
   );
+  const { enabled: twoStepEnabled } = await getUserTwoStepConfig(data.user.id, supabase);
+  const store = await cookies();
+  if (twoStepEnabled) {
+    store.set(TWO_STEP_PENDING_COOKIE, "1", {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 30,
+    });
+  } else {
+    store.delete(TWO_STEP_PENDING_COOKIE);
+  }
+
   return NextResponse.json({
     user: { id: data.user.id, email: data.user.email, name: p?.display_name ?? null },
     deletionCancelled: restored,
+    requiresTwoStep: twoStepEnabled,
   });
 }

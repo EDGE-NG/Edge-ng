@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { authClient } from "@/lib/supabase";
+import { TWO_STEP_PENDING_COOKIE } from "@/lib/totp";
 
 /**
  * POST -> sign out (PRD REQ-ID-1).
@@ -46,6 +48,9 @@ export async function POST(req: Request) {
       console.warn("[logout] global signOut had an error, falling back to local:", error);
       await supabase.auth.signOut({ scope: "local" });
     }
+
+    const store = await cookies();
+    store.delete(TWO_STEP_PENDING_COOKIE);
 
     return NextResponse.json({ ok: true, scope });
   } catch (err) {
