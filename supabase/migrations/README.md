@@ -58,6 +58,10 @@ on conflict (provider, model) do update
       note = excluded.note, updated_at = now();
 ```
 
+## What `0008_market_cache.sql` adds
+
+`market_cache`: the latest candles per instrument and timeframe for keyed market data (Twelve Data), shared by every server so Edge stays inside the plan's request limits (`web/lib/market-cache.ts`). Public market data only, no user data; server only (row-level security on, no policies). The per-minute and per-day request counts use `rate_limit_hit` from `0005`. **Apply it before deploying the web code that uses it**; until then, candles are fetched directly as before.
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.

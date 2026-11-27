@@ -10,7 +10,9 @@
  * launch (REQ-DT-5); candles are cached only briefly, per instrument.
  */
 
-export type AssetClass = "crypto" | "forex" | "metals" | "indices";
+import { BudgetError, cachedCandles } from "./market-cache";
+
+export type AssetClass ="crypto" | "forex" | "metals" | "indices";
 export type Timeframe = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
 export const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 
@@ -144,15 +146,38 @@ async function twelveCandles(sym: string, tf: Timeframe, limit: number): Promise
 const cache = new Map<string, { at: number; candles: Candle[] }>();
 const TTL_MS: Record<Timeframe, number> = { "1m": 5_000, "5m": 10_000, "15m": 15_000, "30m": 20_000, "1h": 30_000, "4h": 60_000, "1d": 120_000 };
 
-/** Latest candles, oldest first. The last candle may still be forming. */
+/**
+ * Latest candles, oldest first. The last candle may still be forming.
+ *
+ * Crypto (Binance, no key) uses a short per-server cache. Keyed providers
+ * (Twelve Data) go through lib/market-cache.ts: one shared cache for every
+ * server, and a per-minute / per-day budget under the plan's limits.
+ */
 export async function getCandles(inst: Instrument, tf: Timeframe, limit = 300): Promise<Candle[]> {
+  if (inst.provider === "twelvedata") {
+    const candles = await cachedCandles({
+      provider: "twelvedata",
+      key: `twelvedata|${inst.providerSymbol}|${tf}|${limit}`,
+      tf,
+      fetcher: async () => {
+        const c = await twelveCandles(inst.providerSymbol, tf, limit);
+        if (c.length === 0) throw new MarketError("No price data returned for that instrument.", 502, "empty");
+        return c;
+      },
+      isRateLimit: (err) => err instanceof MarketError && err.code === "rate_limited",
+    }).catch((err) => {
+      if (err instanceof BudgetError) {
+        throw new MarketError("Edge has used its market-data allowance for now. Prices will be back shortly.", 429, "rate_limited");
+      }
+      throw err;
+    });
+    return candles;
+  }
+
   const key = `${inst.symbol}|${tf}|${limit}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS[tf]) return hit.candles;
-  const candles =
-    inst.provider === "binance"
-      ? await binanceCandles(inst.providerSymbol, tf, limit)
-      : await twelveCandles(inst.providerSymbol, tf, limit);
+  const candles = await binanceCandles(inst.providerSymbol, tf, limit);
   if (candles.length === 0) throw new MarketError("No price data returned for that instrument.", 502, "empty");
   cache.set(key, { at: Date.now(), candles });
   return candles;
