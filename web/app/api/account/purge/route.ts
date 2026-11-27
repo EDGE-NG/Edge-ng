@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { purgeDueAccounts } from "@/lib/account-deletion";
+import { purgeOldAuditLog } from "@/lib/audit-retention";
 import { cleanupOldFrames } from "@/lib/frame-cleanup";
 import { purgeExpiredLimits } from "@/lib/rate-limit";
 
@@ -9,8 +10,9 @@ import { purgeExpiredLimits } from "@/lib/rate-limit";
  * alerts) calls this once a day with `Authorization: Bearer <CRON_SECRET>`.
  * It deletes every account whose 14-day grace period has ended: files first,
  * then the account and all its data. It also deletes old chart pictures
- * (lib/frame-cleanup.ts) and clears expired rate-limit rows
- * (lib/rate-limit.ts), so no second scheduler job is needed. Not for browsers.
+ * (lib/frame-cleanup.ts), clears expired rate-limit rows (lib/rate-limit.ts)
+ * and deletes audit log rows older than 24 months (lib/audit-retention.ts),
+ * so no second scheduler job is needed. Not for browsers.
  */
 export const maxDuration = 60;
 
@@ -38,7 +40,13 @@ async function run(req: Request) {
   } catch (err) {
     console.error("[account/purge] rate-limit cleanup failed:", err);
   }
-  return NextResponse.json({ ...accounts, frames, rateLimitsCleared: rateLimits });
+  let auditRowsDeleted: number | null = null;
+  try {
+    auditRowsDeleted = await purgeOldAuditLog();
+  } catch (err) {
+    console.error("[account/purge] audit log cleanup failed:", err);
+  }
+  return NextResponse.json({ ...accounts, frames, rateLimitsCleared: rateLimits, auditRowsDeleted });
 }
 
 export const GET = run;

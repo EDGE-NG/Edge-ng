@@ -32,6 +32,9 @@ Checklist alerts: `checklist_monitors` (markets a trader asked Edge to watch wit
 ## What `0005_rate_limits.sql` adds
 
 `rate_limits`, one counter per key for the sign-in, sign-up, password reset, upload and voice limits, plus `rate_limit_hit(key, window_ms)`, which counts one attempt atomically. The limits used to live in each server's memory, so on Vercel every server copy counted on its own. Keys are SHA-256 hashes, never an email or IP. Server only (row-level security on, no policies). Expired rows are removed by the daily job. **Apply it before deploying the web code that uses it**; until then the web code falls back to the old per-server counter.
+## What `0006_audit_log_retention.sql` adds
+
+Audit log retention of 24 months, as the schema and the Privacy Policy say. The log stays append-only; the only exception is `purge_old_audit_log(limit)`, which deletes rows older than 24 months (oldest first) and is called by the daily job. Updates, and deleting anything younger than 24 months, are still refused by the database. Server only.
 
 ## How to apply
 
