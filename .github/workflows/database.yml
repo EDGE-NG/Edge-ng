@@ -1,0 +1,71 @@
+# Database checks for every pull request into main that touches supabase/.
+# Make "Database - migrations apply cleanly" required in branch protection
+# once it has run green on main.
+name: Database
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrations:
+    name: Database - migrations apply cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # AGENTS.md: database changes go in a NEW migration file, never an edit to
+      # an applied one. Applied migrations can't be re-run on the live project.
+      - name: Only new migration files (no edits, renames or deletes)
+        if: github.event_name == 'pull_request'
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-status "$base"...HEAD -- 'supabase/migrations/*.sql' | grep -v '^A' || true)
+          if [ -n "$changed" ]; then
+            echo "These existing migrations were changed. Add a new migration file instead:"
+            echo "$changed"
+            exit 1
+          fi
+
+      - name: Migration file names are numbered and unique
+        run: |
+          cd supabase/migrations
+          bad=$(ls *.sql | grep -vE '^[0-9]{4}_[a-z0-9_]+\.sql$' || true)
+          if [ -n "$bad" ]; then echo "Name migrations 000N_short_name.sql:"; echo "$bad"; exit 1; fi
+          dup=$(ls *.sql | cut -c1-4 | sort | uniq -d)
+          if [ -n "$dup" ]; then echo "Two migrations share a number: $dup"; exit 1; fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.4.0  # same as `npx supabase` locally
+
+      # Starts a fresh Postgres and applies every migration in order; any SQL
+      # error fails the check.
+      - name: Apply all migrations to a fresh database
+        run: supabase db start
+
+      # Browsers reach public tables through the Supabase API, so each one needs
+      # row-level security (AGENTS.md; server-only tables have it on with no
+      # policies).
+      - name: Every public table has row-level security
+        run: |
+          db=$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)
+          missing=$(docker exec "$db" psql -U postgres -tAc             "select string_agg(c.relname, ', ') from pg_class c join pg_namespace n on n.oid = c.relnamespace
+             where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity")
+          if [ -n "$missing" ]; then
+            echo "These public tables have no row-level security: $missing"
+            echo "Add: alter table public.<name> enable row level security;"
+            exit 1
+          fi
+          echo "All public tables have row-level security."
