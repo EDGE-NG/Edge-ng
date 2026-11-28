@@ -36,11 +36,9 @@ import {
   usdPerQuote,
   type TicketProps,
 } from "./ticket-kit";
+import { ticketStyle } from "@/lib/platforms";
 
-/** Which ticket a platform gets. */
-export function ticketStyle(platform: string): "spot" | "lots" {
-  return platform === "Binance" || platform === "Bybit" || platform === "OKX" ? "spot" : "lots";
-}
+export { ticketStyle };
 
 /** The ticket for the platform the trader picked. */
 export function PlatformTicket(props: TicketProps & { platform: string }) {
