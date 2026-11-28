@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>Confirm your new email for Edge</title>
+  <title>Confirm your Edge email change</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f6f5;">
   <!-- preview text shown next to the subject in the inbox -->
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Confirm the change to your Edge sign-in email.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your code to confirm the change to your Edge sign-in email.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f6f5" style="background:#f4f6f5;">
     <tr>
       <td align="center" style="padding:32px 16px;">
@@ -30,17 +30,17 @@
           <!-- card -->
           <tr>
             <td align="center" bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e2e6e4;border-radius:10px;padding:32px 28px;font-family:'Inter Tight', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;color:#1a1f1c;text-align:center;">
-              <h1 style="margin:0 0 12px;font-size:20px;line-height:28px;font-weight:600;color:#1a1f1c;">Confirm your new email</h1>
-              <p style="margin:0px 0 0;font-size:15px;line-height:24px;color:#1a1f1c;">You asked to change your Edge sign-in email from <strong>{{ .Email }}</strong> to <strong>{{ .NewEmail }}</strong>.</p><table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 4px;">
+              <h1 style="margin:0 0 12px;font-size:20px;line-height:28px;font-weight:600;color:#1a1f1c;">Confirm your email change</h1>
+              <p style="margin:0px 0 0;font-size:15px;line-height:24px;color:#1a1f1c;">You asked to change your Edge sign-in email from <strong>{{ .Email }}</strong> to <strong>{{ .NewEmail }}</strong>. To keep your account safe, you may get a code at each address.</p><p style="margin:22px 0 0;font-size:14px;line-height:22px;color:#1a1f1c;">Enter this code in Edge, in the box for the address this email was sent to:</p><p style="margin:10px 0 0;font-size:28px;line-height:34px;font-weight:700;letter-spacing:6px;color:#1a1f1c;">{{ .Token }}</p><p style="margin:22px 0 0;font-size:14px;line-height:22px;color:#66706a;">Or use the button:</p><table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:14px auto 4px;">
                 <tr>
                   <td align="center" bgcolor="#5ef088" style="border-radius:8px;">
-                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:12px 22px;font-family:'Inter Tight', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:15px;font-weight:600;color:#04110a;text-decoration:none;border-radius:8px;">Confirm new email</a>
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:12px 22px;font-family:'Inter Tight', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;font-size:15px;font-weight:600;color:#04110a;text-decoration:none;border-radius:8px;">Confirm the change</a>
                   </td>
                 </tr>
               </table><p style="margin:20px 0 0;font-size:13px;line-height:20px;color:#66706a;">
                 Button not working? Copy this link into your browser:<br>
                 <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#16803f;word-break:break-all;">{{ .ConfirmationURL }}</a>
-              </p><p style="margin:22px 0 0;font-size:13px;line-height:20px;color:#66706a;">If you didn't ask for this, don't click the link, and change your password.</p>
+              </p><p style="margin:22px 0 0;font-size:13px;line-height:20px;color:#66706a;">The code and the link work once and expire within an hour. If you didn't ask for this, don't use them, and change your password.</p>
             </td>
           </tr>
           <!-- footer -->
