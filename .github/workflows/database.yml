@@ -21,7 +21,7 @@ jobs:
     name: Database - migrations apply cleanly
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -46,7 +46,7 @@ jobs:
           dup=$(ls *.sql | cut -c1-4 | sort | uniq -d)
           if [ -n "$dup" ]; then echo "Two migrations share a number: $dup"; exit 1; fi
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 3.4.0  # same as `npx supabase` locally
 
