@@ -89,17 +89,16 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (d.code === "unconfirmed") {
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
+        }
         setExists(d.code === "exists");
         throw new Error(d.error || "Something went wrong. Try again.");
       }
-      // Email confirmation is on: Supabase sent a verification link (PRD F1 step 2).
+      // Email confirmation is on: Supabase sent a 6-digit code (Task M1, Figma 2, PRD F1).
       // signing in within the 14 days cancels a scheduled account deletion (PRD F13)
       if (d.deletionCancelled) toast.success("Welcome back. Your account deletion was cancelled.");
-      if (d.needsConfirmation) {
-        setNotice(d.message || "Check your email for a confirmation link, then sign in.");
-        setBusy("");
-        return;
-      }
       let destination = "/checklist";
       try {
         const search = new URLSearchParams(window.location.search);
@@ -108,6 +107,10 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
         if (url.origin === window.location.origin) destination = url.pathname + url.search;
       } catch {
         /* fallback to /checklist */
+      }
+      if (d.needsConfirmation) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}&from=${encodeURIComponent(destination)}`);
+        return;
       }
       router.push(destination);
       router.refresh();

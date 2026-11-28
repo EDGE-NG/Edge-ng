@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   if (error || !data.user) {
     if (error?.code === "email_not_confirmed") {
       return NextResponse.json(
-        { error: "Confirm your email first: open the link we sent you, then sign in.", code: "unconfirmed" },
+        { error: "Confirm your email first: enter the 6-digit code we sent you, then sign in.", code: "unconfirmed" },
         { status: 403 }
       );
     }

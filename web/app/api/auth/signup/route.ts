@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         needsConfirmation: true,
-        message: `We sent a link to ${email}. Open it to confirm your email, then sign in.`,
+        message: `We sent a 6-digit code to ${email}. Enter it to verify your email.`,
       },
       { status: 201 }
     );
