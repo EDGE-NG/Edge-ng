@@ -62,18 +62,14 @@ const USD_LIKE = new Set(["USD", "USDT", "USDC", "FDUSD", "BUSD"]);
 
 /**
  * The currency a ticket's risk amount is in, or null when Edge can't tell:
- *  - MT5-style ticket (lots): Edge works risk out in USD;
- *  - spot ticket (Binance, Bybit, OKX): the pair's quote asset;
- *  - Edge's own ticket: the trader types an amount in an unnamed currency.
+ *  - lot ticket: the starting balance and risk are in USD;
+ *  - spot ticket (Binance, Bybit, OKX): the pair's quote asset.
  */
-export function riskCurrency(style: "mt" | "spot" | "edge", instrumentLabel: string): string | null {
-  if (style === "mt") return "USD";
-  if (style === "spot") {
-    const quote = instrumentLabel.includes("/") ? instrumentLabel.split("/").pop()!.replace(/\W/g, "") : "USDT";
-    if (USD_LIKE.has(quote)) return "USD";
-    return minorDigits(quote) != null ? quote : null;
-  }
-  return null;
+export function riskCurrency(style: "spot" | "lots", instrumentLabel: string): string | null {
+  if (style === "lots") return "USD";
+  const quote = instrumentLabel.includes("/") ? instrumentLabel.split("/").pop()!.replace(/\W/g, "") : "USDT";
+  if (USD_LIKE.has(quote)) return "USD";
+  return minorDigits(quote) != null ? quote : null;
 }
 
 /** P&L in minor units: R times the risk amount, or null without both. */

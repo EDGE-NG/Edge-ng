@@ -1,7 +1,8 @@
-/** Which ticket a platform gets (decision, Daniel, 2026-11-21). Shared by the workspace and the server. */
-export function ticketStyle(platform: string): "mt" | "spot" | "edge" {
-  // MT5-style New Order window: MetaTrader and the forex platforms that work in lots
-  if (/^MetaTrader/.test(platform) || ["cTrader", "TradeLocker", "Match-Trader"].includes(platform)) return "mt";
-  if (platform === "Binance" || platform === "Bybit" || platform === "OKX") return "spot";
-  return "edge";
+/**
+ * Which ticket a platform gets (decision, Daniel, 2026-11-26): crypto
+ * exchanges get the spot ticket, everything else the lot ticket. Shared by
+ * the workspace and the server.
+ */
+export function ticketStyle(platform: string): "spot" | "lots" {
+  return platform === "Binance" || platform === "Bybit" || platform === "OKX" ? "spot" : "lots";
 }
