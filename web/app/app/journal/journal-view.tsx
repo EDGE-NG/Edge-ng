@@ -6,7 +6,7 @@ import AppFrame from "../../_components/app-frame";
 import { IconBook, IconCheck, IconRetry, IconX } from "../../_components/icons";
 import { toast } from "../../_components/toaster";
 import MonthReview from "./month-review";
-import { OutcomeBadge, TradeOutcome } from "../../_components/trade-outcome";
+import { TradeOutcome } from "../../_components/trade-outcome";
 import { handleSessionExpired } from "@/lib/client-auth";
 import type { TradeView } from "@/lib/outcome";
 
@@ -77,7 +77,7 @@ interface JournalEntry {
 export default function JournalView() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "approved" | "denied" | "overridden">("all");
+  const [filter, setFilter] = useState<"all" | "followed" | "broke" | "needs_outcome">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notesState, setNotesState] = useState<Record<string, { notes: string; lessons: string; saving: boolean; saved: boolean }>>({});
 
@@ -160,9 +160,9 @@ export default function JournalView() {
   }
 
   const filtered = entries.filter((e) => {
-    if (filter === "approved") return e.result === "approved";
-    if (filter === "denied") return e.result === "denied";
-    if (filter === "overridden") return e.resolution === "overridden" || Boolean(e.override);
+    if (filter === "followed") return e.resolution !== "overridden";
+    if (filter === "broke") return e.resolution === "overridden";
+    if (filter === "needs_outcome") return e.resolution === "placed" && e.trade?.state !== "closed";
     return true;
   });
 
@@ -178,27 +178,54 @@ export default function JournalView() {
             </p>
           </div>
 
+          {/* Summary cards */}
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-line bg-panel p-5 sm:p-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted">Followed your plan</div>
+              <div className="mt-1 text-3xl font-light tracking-tight text-ink">
+                {entries.length > 0 ? Math.round((entries.filter((e) => e.resolution !== "overridden").length / entries.length) * 100) : 0}%
+              </div>
+              <div className="mt-1 text-xs text-muted">
+                {entries.filter((e) => e.resolution !== "overridden").length} of {entries.length} trades
+              </div>
+            </div>
+            <div className="rounded-xl border border-line bg-panel p-5 sm:p-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted">Broke a rule</div>
+              <div className="mt-1 text-3xl font-light tracking-tight text-fail">
+                {entries.filter((e) => e.resolution === "overridden").length}
+              </div>
+              <div className="mt-1 text-xs text-muted">Overridden decisions</div>
+            </div>
+            <div className="rounded-xl border border-line bg-panel p-5 sm:p-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted">Waiting for an outcome</div>
+              <div className="mt-1 text-3xl font-light tracking-tight text-maybe">
+                {entries.filter((e) => e.resolution === "placed" && e.trade?.state !== "closed").length}
+              </div>
+              <div className="mt-1 text-xs text-muted">Add the result to finish the entry</div>
+            </div>
+          </div>
+
           {/* Filter Pills */}
           <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface/60 p-1">
             {(
               [
-                { id: "all", label: "All decisions" },
-                { id: "approved", label: "Passed" },
-                { id: "denied", label: "Denied" },
-                { id: "overridden", label: "Overridden" },
+                { id: "all", label: "All", count: entries.length },
+                { id: "followed", label: "Followed plan", count: entries.filter((e) => e.resolution !== "overridden").length },
+                { id: "broke", label: "Broke a rule", count: entries.filter((e) => e.resolution === "overridden").length },
+                { id: "needs_outcome", label: "Needs outcome", count: entries.filter((e) => e.resolution === "placed" && e.trade?.state !== "closed").length },
               ] as const
             ).map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setFilter(tab.id)}
+                onClick={() => setFilter(tab.id as "all" | "followed" | "broke" | "needs_outcome")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   filter === tab.id
                     ? "bg-panel text-ink shadow-sm ring-1 ring-line"
                     : "text-muted hover:text-ink"
                 }`}
               >
-                {tab.label}
+                {tab.label} {tab.count > 0 ? <span className="ml-1">{tab.count}</span> : null}
               </button>
             ))}
           </div>
@@ -328,13 +355,29 @@ export default function JournalView() {
                           Placed
                         </span>
                       )}
-                      {entry.trade?.state === "hit" && (
-                        <span className="flex items-center gap-1.5 rounded-full bg-warn-bg px-2.5 py-1 text-xs font-medium text-maybe">
-                          <IconRetry className="h-3.5 w-3.5" />
-                          Confirm outcome
-                        </span>
+                      {/* Outcome column: only for trades that were actually taken */}
+                      {(entry.resolution === "placed" || entry.resolution === "overridden") && (
+                        <div>
+                          <TradeOutcome
+                            decisionId={entry.id}
+                            trade={entry.trade ?? null}
+                            onChange={async (t) => {
+                              const res = await fetch(`/api/workspace/decisions/${entry.id}/outcome`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(t),
+                              });
+                              if (res.ok) {
+                                const res2 = await fetch("/api/journal");
+                                if (res2.ok) {
+                                  const data = await res2.json();
+                                  setEntries(data.entries || []);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
                       )}
-                      {entry.trade?.state === "closed" && <OutcomeBadge trade={entry.trade} />}
 
                       <span className="ml-1 text-xs text-muted">
                         {isExpanded ? "Collapse ▲" : "Details ▼"}
@@ -548,7 +591,7 @@ export default function JournalView() {
           </div>
         )}
       </div>
-    </AppFrame>
-  );
-}
+      </AppFrame>
+    );
+  }
 
