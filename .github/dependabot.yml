@@ -1,0 +1,35 @@
+# Dependabot: weekly pull requests for outdated packages and GitHub Actions.
+# Security fixes come as soon as GitHub knows about them (turn on
+# "Dependabot security updates" in Settings → Code security).
+# Grouped so the team gets a few PRs a week, not dozens. Each one goes through
+# CI and code-owner review like any other PR.
+version: 2
+updates:
+  # npm workspaces: one lockfile at the root covers web/, api/ and shared/
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Lagos
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Next.js and NestJS major versions need a planned upgrade (AGENTS.md)
+      - dependency-name: next
+        update-types: [version-update:semver-major]
+      - dependency-name: "@nestjs/*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+    groups:
+      actions:
+        patterns: ["*"]
