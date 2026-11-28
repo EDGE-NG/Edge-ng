@@ -128,7 +128,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             );
           }
         } catch {
-          /* price unavailable: the time window still applies */
+          // EC-G4 / REQ-GT-7: no fresh price means the check couldn't run, so the
+          // placement isn't recorded. The decision stays open: the trader tries again.
+          return NextResponse.json(
+            { error: "Edge couldn't confirm the current price. Try again in a few seconds.", code: "price_unconfirmed" },
+            { status: 503 }
+          );
         }
       }
     }

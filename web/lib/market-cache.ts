@@ -183,15 +183,17 @@ export async function cachedCandles(req: CacheRequest): Promise<Candle[]> {
     best = newer(best, shared);
     if (isFresh(best)) return best;
 
-    // One server refreshes; the others wait for its result.
-    if (!(await claim(req.key))) {
-      for (let waited = 0; waited < WAIT_MS; waited += POLL_MS) {
-        await sleep(POLL_MS);
-        best = newer(best, await readShared(req.key).catch(() => null));
-        if (isFresh(best)) return best;
-      }
-      return fallback(new BudgetError("another server is refreshing these candles"));
+    // One server refreshes; the others wait for its result. If that server
+    // gives up (e.g. its own call was refused) the hold is released, and a
+    // waiting caller takes the refresh over instead of failing.
+    let claimed = await claim(req.key);
+    for (let waited = 0; !claimed && waited < WAIT_MS; waited += POLL_MS) {
+      await sleep(POLL_MS);
+      best = newer(best, await readShared(req.key).catch(() => null));
+      if (isFresh(best)) return best;
+      claimed = await claim(req.key).catch(() => false);
     }
+    if (!claimed) return fallback(new BudgetError("another server is refreshing these candles"));
 
     try {
       // Stale-tolerant callers don't queue for a slot; gate checks wait a little.
