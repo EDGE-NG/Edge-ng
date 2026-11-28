@@ -1,7 +1,7 @@
 /**
  * Edge watches placed trades (Task D5; flow by Daniel, 2026-11-27).
  *
- *  1. "Place this trade" opens a `trades` row from the ticket: entry, stop
+ *  1. "I placed this trade" opens a `trades` row from the ticket: entry, stop
  *     loss, take profit (openTrade).
  *  2. Every few minutes the scheduler (/api/alerts/run) runs watchTrades: for
  *     each open trade with a stop loss or take profit, Edge reads its own

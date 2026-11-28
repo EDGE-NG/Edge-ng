@@ -194,7 +194,7 @@ export function evaluateRiskRule(rule: Rule, risk: RiskParams, t: Ticket | null,
   const maxTrades = risk.maxTradesPerDay;
   if (key && maxRisk && maxRisk.itemKey === key) {
     if (m.riskPct == null)
-      return { ...base, result: "inconclusive", observed: "", reasoning: "Enter your account size and the amount you're risking.", missing: "account size and risk amount" };
+      return { ...base, result: "inconclusive", observed: "", reasoning: "Enter your starting balance and the amount you're risking.", missing: "starting balance and risk amount" };
     const ok = m.riskPct <= maxRisk.value + 1e-9;
     return {
       ...base,

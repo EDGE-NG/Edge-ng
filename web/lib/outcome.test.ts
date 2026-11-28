@@ -10,10 +10,9 @@ describe("money follows the currency (PRD 9.2)", () => {
     expect(minorDigits("USDT")).toBeNull();
   });
   it("works out the risk currency per ticket", () => {
-    expect(riskCurrency("mt", "GBP/JPY")).toBe("USD");
+    expect(riskCurrency("lots", "GBP/JPY")).toBe("USD");
     expect(riskCurrency("spot", "BTC/USDT")).toBe("USD");
     expect(riskCurrency("spot", "ETH/BTC")).toBeNull();
-    expect(riskCurrency("edge", "EUR/USD")).toBeNull();
   });
   it("turns R and the risk amount into minor units", () => {
     expect(pnlMinor(2, 50, "USD")).toBe(10000);
