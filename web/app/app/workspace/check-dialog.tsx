@@ -7,7 +7,7 @@
  *  2. Edge runs the gate. All checks run at once on the server; fresh ones
  *     from the warm-up are reused, so it usually answers in about a second;
  *  3. each rule ticks or crosses in checklist order, then the result:
- *     Passes your checklist (Place this trade), or Fails / Needs more
+ *     Passes your checklist (I placed this trade), or Fails / Needs more
  *     evidence (Accept, or Override while the weekly allowance lasts).
  * Code decides; the popup only shows the decision (PR-GT-7).
  */
@@ -295,12 +295,12 @@ interface Execution {
 }
 
 /**
- * Until accounts can be connected, Edge acts as if it placed the order
- * (decision, Daniel, 2026-11-26) so the full flow can be shown. It is always
- * labelled Demo: Edge never tells a trader a real order exists when it doesn't.
+ * Until accounts can be connected, Edge sends nothing (decision, Daniel,
+ * 2026-11-26). The demo repeats the order from the ticket so the trader can
+ * place it on their platform themselves: no order number and no fill price,
+ * since no real order exists (review, Sheyi, 2026-11-27).
  */
 function simulateOrder(platform: string, side: "buy" | "sell", draft: TicketDraft, instLabel: string, decimals: number): Execution {
-  const id = crypto.getRandomValues(new Uint32Array(1))[0] % 100_000_000;
   const kind =
     draft.orderType === "market" ? "" : draft.orderType === "limit" ? " limit" : draft.orderType === "stop_limit" ? " stop limit" : " stop";
   const size = draft.size != null ? `${draft.size} ${draft.sizeUnit === "lots" ? "lots " : ""}` : "";
@@ -310,17 +310,17 @@ function simulateOrder(platform: string, side: "buy" | "sell", draft: TicketDraf
   return {
     status: "placed",
     platform: platform || "platform",
-    orderId: String(id).padStart(8, "0"),
-    summary: draft.orderType === "market" ? `${what}, filled at ${at}` : `${what} at ${at}, waiting to fill`,
+    orderId: null,
+    summary: draft.orderType === "market" ? `${what} at market` : `${what} at ${at}`,
     simulated: true,
   };
 }
 
 /**
- * After "Place this trade". When the platform confirms the order, the trader
- * sees it named: "Your trade has been placed on your MT5 / Binance / ...".
- * Until accounts can be connected no order is sent, so Edge says what really
- * happened (the trade is recorded) instead of claiming a placed order.
+ * After "I placed this trade". When the platform confirms the order, the
+ * trader sees it named: "Your trade has been placed on your MT5 / Binance / ...".
+ * Until accounts can be connected no order is sent, so the main sentence says
+ * so: "Demo: nothing was sent to your {platform}. Place the order there yourself."
  */
 function Placed({
   approved,
@@ -346,23 +346,23 @@ function Placed({
         </span>
         {approved ? "Your checklist has all passed" : "Override recorded"}
       </p>
-      {placedOnPlatform ? (
+      {execution?.simulated ? (
         <>
           <p className="text-[13px] leading-relaxed text-ink/85">
-            {execution?.simulated && (
-              <span className="mr-1.5 rounded-full border border-dashed border-line px-2 py-0.5 text-[11px] font-medium text-muted">Demo</span>
-            )}
+            <b className="font-semibold">Demo:</b> nothing was sent to your {platform}. Place the order there yourself.
+            {approved ? "" : " It's in your journal as an override."}
+          </p>
+          {execution.summary && <p className="text-xs text-muted tabular-nums">{execution.summary}</p>}
+        </>
+      ) : placedOnPlatform ? (
+        <>
+          <p className="text-[13px] leading-relaxed text-ink/85">
             Your trade has been placed on your {platform}.{approved ? "" : " It's in your journal as an override."}
           </p>
           <p className="text-xs text-muted tabular-nums">
             {execution?.summary ? `${execution.summary} · ` : ""}
             {execution?.orderId ? `Order #${execution.orderId}` : ""}
           </p>
-          {execution?.simulated && (
-            <p className="text-xs text-muted">
-              Demo order: Edge isn&apos;t connected to your {platform} yet, so nothing was sent. Place it on your {platform} yourself.
-            </p>
-          )}
         </>
       ) : (
         <p className="text-[13px] leading-relaxed text-ink/85">
@@ -428,7 +428,7 @@ function Outcome({
       const d = await res.json().catch(() => ({}));
       if (d.overrides) setAllowance(d.overrides);
       if (d.execution) setExecution(d.execution as Execution);
-      // No connected account yet: act as if the order was placed, labelled Demo.
+      // No connected account yet: nothing is sent, so show the demo message.
       else if (res.ok && action === "placed") setExecution(simulateOrder(platform, side, draft, instLabel, decimals));
       if (!res.ok) {
         setMsg(d.error || "Couldn't save that.");
@@ -516,14 +516,14 @@ function Outcome({
         ) : resolution === "expired" || expired ? null : decision.result === "approved" ? (
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
-              <button className={main} disabled={busy} onClick={() => act("placed")}>Place this trade</button>
+              <button className={main} disabled={busy} onClick={() => act("placed")}>I placed this trade</button>
               <button className={btn} disabled={busy} onClick={() => act("cancel")}>Don&apos;t trade</button>
             </div>
           </div>
         ) : resolution === "overridden" ? (
           <div className="space-y-2">
             <p className="text-sm text-maybe">Override recorded. You can still place this trade.</p>
-            <button className={main} disabled={busy} onClick={() => act("placed")}>Place this trade</button>
+            <button className={main} disabled={busy} onClick={() => act("placed")}>I placed this trade</button>
             {allowance && <p className="text-xs text-muted">{allowance.left} of {allowance.limit} overrides left this week.</p>}
           </div>
         ) : overriding && !noOverridesLeft ? (
