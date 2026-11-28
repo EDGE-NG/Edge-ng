@@ -39,7 +39,8 @@ export async function GET(req: Request) {
     });
 
   try {
-    const candles = await getCandles(inst, tf, 300);
+    // the chart shows the data's age, so the last candles are fine when fresh ones can't be had
+    const candles = await getCandles(inst, tf, 300, { allowStale: true });
     return NextResponse.json({
       symbol: inst.symbol,
       timeframe: tf,

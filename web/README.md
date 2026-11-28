@@ -152,10 +152,14 @@ Without a scheduler, alerts only run when the trader presses **Check now**.
 
 ## Market data allowance
 
-Forex, metals and indices come from Twelve Data (free plan: about 8 requests a minute, 800 a day). The chart, live re-checks, checklist alerts and trade watching all need candles, so `lib/market-cache.ts`:
+Forex, metals and indices come from Twelve Data (free plan: about 8 requests a minute, 800 a day). The chart, live re-checks, checklist alerts and trade watching all need candles, so `lib/market-cache.ts` (migration `0008_market_cache.sql`):
 
-- keeps the latest candles per instrument and timeframe in Postgres (`market_cache`, migration `0008_market_cache.sql`), shared by every server, for 1 to 15 minutes depending on the timeframe. Requests grow with the number of markets open, not the number of traders;
-- counts requests per minute and per UTC day (shared), staying a little under the plan's limits;
-- near the limit, serves the last candles only while they're at most 10 minutes old (longer for 4h / 1d). Older than that, prices show as unavailable and checks are Inconclusive, never run on old prices.
+- **Shares candles.** The latest 300 candles per instrument and timeframe live in Postgres (`market_cache`), shared by every server, and each caller takes the slice it needs. One server at a time refreshes a market; the others wait a few seconds for its result. Requests grow with the number of markets open, not the number of traders.
+- **Spaces requests.** Every server together waits at least 60 / 7 seconds between requests (`market_budget`), so no burst passes the per-minute limit. Only requests that go out count towards the day (95% of the plan).
+- **Never feeds old prices to the gate.**
+  - Buy / Sell uses candles at most 15 s old, and the "price moved since the approval" check at most 5 s old.
+  - Other checks use candles at most one refresh old (1 to 15 minutes by timeframe).
+  - If fresh candles can't be had, the check fails and the rule is **Inconclusive**.
+  - Only the chart (which shows the data's age) and trade watching may fall back to the last candles, and only while they're at most 10 minutes old (longer for 4h / 1d).
 
-For a paid plan, set `TWELVE_DATA_PER_MINUTE` and `TWELVE_DATA_PER_DAY` to its limits. Crypto (Binance) has no key and isn't counted. The daily job removes cached candles unused for a day.
+For a paid plan, set `TWELVE_DATA_PER_MINUTE` and `TWELVE_DATA_PER_DAY` to its limits. The free plan supports about one forex market watched at a time all day; more needs a paid plan. Crypto (Binance) has no key and isn't counted. The daily job removes cached candles unused for a day.

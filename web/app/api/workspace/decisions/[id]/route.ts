@@ -117,8 +117,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const inst = findInstrument(d.instrument);
       if (inst) {
         try {
-          // same request as the chart, so the price usually comes from its cache (5 s)
-          const c = await getCandles(inst, "1m", 300);
+          // EC-G4: compare against a price at most 5 s old (never old cached candles)
+          const c = await getCandles(inst, "1m", 300, { maxAgeMs: 5_000 });
           const p = c[c.length - 1].close;
           if (Math.abs(p - d.reference_price) > d.price_tolerance) {
             await resolve("expired", "expired");
