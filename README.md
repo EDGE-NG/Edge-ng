@@ -87,3 +87,14 @@ Owners: **Sheyi** and **Daniel**.
 - Never commit secrets, API keys or `.env` files.
 - Mention the PRD IDs you worked on in commit messages, e.g. `Add checklist approval (PR-CL-3)`.
 - Open a pull request and ask Sheyi or Daniel to review before merging.
+
+### Automatic checks on every pull request
+
+- **CI** (`.github/workflows/ci.yml`): backend and frontend lint, tests and build, plus the safety check (no secrets, no `.env` files, no prediction wording).
+- **Database** (`.github/workflows/database.yml`):
+  - every migration applies cleanly to a fresh database
+  - existing migrations are never edited (add a new `000N_name.sql` instead)
+  - migration numbers are unique
+  - every public table has row-level security
+- **CodeQL** (`.github/workflows/codeql.yml`): GitHub's security scan of the TypeScript code. Findings show under Security → Code scanning and on the pull request.
+- **Dependabot** (`.github/dependabot.yml`): weekly grouped pull requests for outdated packages, and security fixes as soon as they're known. Review them like any other PR. Next.js and NestJS major versions are skipped; those need a planned upgrade.
