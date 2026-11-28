@@ -10,6 +10,8 @@
  * launch (REQ-DT-5); candles are cached only briefly, per instrument.
  */
 
+import { BudgetError, cachedCandles } from "./market-cache";
+
 export type AssetClass = "crypto" | "forex" | "metals" | "indices";
 export type Timeframe = "1m" | "5m" | "15m" | "30m" | "1h" | "4h" | "1d";
 export const TIMEFRAMES: Timeframe[] = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
@@ -144,18 +146,62 @@ async function twelveCandles(sym: string, tf: Timeframe, limit: number): Promise
 const cache = new Map<string, { at: number; candles: Candle[] }>();
 const TTL_MS: Record<Timeframe, number> = { "1m": 5_000, "5m": 10_000, "15m": 15_000, "30m": 20_000, "1h": 30_000, "4h": 60_000, "1d": 120_000 };
 
-/** Latest candles, oldest first. The last candle may still be forming. */
-export async function getCandles(inst: Instrument, tf: Timeframe, limit = 300): Promise<Candle[]> {
-  const key = `${inst.symbol}|${tf}|${limit}`;
+/** The most candles any caller asks for; keyed providers fetch this once and slice. */
+export const MAX_CANDLES = 300;
+
+export interface CandleOptions {
+  /**
+   * Oldest candles accepted, in ms. Default: the timeframe's refresh time
+   * (keyed providers) or the short per-server cache (crypto). Buy / Sell and
+   * the placement price check ask for seconds.
+   */
+  maxAgeMs?: number;
+  /**
+   * Keyed providers only: when fresh candles can't be had, return the last
+   * ones (at most a few minutes old). For display and trade watching only;
+   * gate checks never set it, so they fail instead (REQ-GT-7).
+   */
+  allowStale?: boolean;
+}
+
+/**
+ * Latest candles, oldest first. The last candle may still be forming.
+ *
+ * Crypto (Binance, no key) uses a short per-server cache. Keyed providers
+ * (Twelve Data) go through lib/market-cache.ts: one shared cache for every
+ * server and an evenly spaced request budget under the plan's limits.
+ */
+export async function getCandles(inst: Instrument, tf: Timeframe, limit = MAX_CANDLES, opts: CandleOptions = {}): Promise<Candle[]> {
+  const n = Math.min(Math.max(1, Math.floor(limit)), MAX_CANDLES);
+  if (inst.provider === "twelvedata") {
+    const candles = await cachedCandles({
+      provider: "twelvedata",
+      key: `twelvedata|${inst.providerSymbol}|${tf}`,
+      tf,
+      maxAgeMs: opts.maxAgeMs,
+      allowStale: opts.allowStale,
+      fetcher: async () => {
+        const c = await twelveCandles(inst.providerSymbol, tf, MAX_CANDLES);
+        if (c.length === 0) throw new MarketError("No price data returned for that instrument.", 502, "empty");
+        return c;
+      },
+    }).catch((err) => {
+      if (err instanceof BudgetError) {
+        throw new MarketError("Edge has used its market-data allowance for now. Prices will be back shortly.", 429, "rate_limited");
+      }
+      throw err;
+    });
+    return candles.slice(-n);
+  }
+
+  const key = `${inst.symbol}|${tf}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS[tf]) return hit.candles;
-  const candles =
-    inst.provider === "binance"
-      ? await binanceCandles(inst.providerSymbol, tf, limit)
-      : await twelveCandles(inst.providerSymbol, tf, limit);
+  const ttl = Math.min(TTL_MS[tf], opts.maxAgeMs ?? Infinity);
+  if (hit && Date.now() - hit.at < ttl) return hit.candles.slice(-n);
+  const candles = await binanceCandles(inst.providerSymbol, tf, MAX_CANDLES);
   if (candles.length === 0) throw new MarketError("No price data returned for that instrument.", 502, "empty");
   cache.set(key, { at: Date.now(), candles });
-  return candles;
+  return candles.slice(-n);
 }
 
 /** Seconds since the last candle closed / last update, to flag delayed data (EC-C6). */

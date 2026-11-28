@@ -95,7 +95,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (refreshed.failed.length) {
       cannotCheck = refreshed.failed.map((f) => `${f.timeframe}: ${f.message}`).join(" ");
     }
-    const candles = await getCandles(inst, tf, 300);
+    // Buy / Sell: candles at most 15 s old; without them the checks fail (Inconclusive)
+    const candles = await getCandles(inst, tf, 300, { maxAgeMs: 15_000 });
     lastPrice = candles[candles.length - 1].close;
   } catch (err) {
     // REQ-GT-7: data or frame unavailable -> "cannot check", never a silent approval

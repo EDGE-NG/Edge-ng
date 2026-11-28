@@ -54,6 +54,8 @@ GEMINI_VISION_MODEL=
 OPENROUTER_MODEL=
 OPENROUTER_VISION_MODEL=
 DATABASE_POOL_MAX=
+TWELVE_DATA_PER_MINUTE=
+TWELVE_DATA_PER_DAY=
 
 # Checklist alerts (optional; see "Checklist alerts" below)
 CRON_SECRET=
@@ -146,4 +148,18 @@ Without a scheduler, alerts only run when the trader presses **Check now**.
 
 **3. Email.** A [Resend](https://resend.com) API key in `RESEND_API_KEY`, and `ALERTS_EMAIL_FROM`, e.g. `Edge <alerts@edge.ng>` (the domain must be verified in Resend).
 
-**Cost.** Each check is one AI call per chart rule on each timeframe that has a new candle, and one market-data request per timeframe. Checks stop at the first failing rule, skip closed markets, and higher timeframes are re-checked only when their candle closes. `ALERTS_MAX_MONITORS` (default 3) caps the markets per trader. Twelve Data's free plan allows 800 requests a day.
+**Cost.** Each check is one AI call per chart rule on each timeframe that has a new candle, and one market-data request per timeframe. Checks stop at the first failing rule, skip closed markets, and higher timeframes are re-checked only when their candle closes. `ALERTS_MAX_MONITORS` (default 3) caps the markets per trader. Twelve Data's free plan allows 800 requests a day; see "Market data allowance" below.
+
+## Market data allowance
+
+Forex, metals and indices come from Twelve Data (free plan: about 8 requests a minute, 800 a day). The chart, live re-checks, checklist alerts and trade watching all need candles, so `lib/market-cache.ts` (migration `0008_market_cache.sql`):
+
+- **Shares candles.** The latest 300 candles per instrument and timeframe live in Postgres (`market_cache`), shared by every server, and each caller takes the slice it needs. One server at a time refreshes a market; the others wait a few seconds for its result. Requests grow with the number of markets open, not the number of traders.
+- **Spaces requests.** Every server together waits at least 60 / 7 seconds between requests (`market_budget`), so no burst passes the per-minute limit. Only requests that go out count towards the day (95% of the plan).
+- **Never feeds old prices to the gate.**
+  - Buy / Sell uses candles at most 15 s old, and the "price moved since the approval" check at most 5 s old.
+  - Other checks use candles at most one refresh old (1 to 15 minutes by timeframe).
+  - If fresh candles can't be had, the check fails and the rule is **Inconclusive**.
+  - Only the chart (which shows the data's age) and trade watching may fall back to the last candles, and only while they're at most 10 minutes old (longer for 4h / 1d).
+
+For a paid plan, set `TWELVE_DATA_PER_MINUTE` and `TWELVE_DATA_PER_DAY` to its limits. The free plan supports about one forex market watched at a time all day; more needs a paid plan. Crypto (Binance) has no key and isn't counted. The daily job removes cached candles unused for a day.

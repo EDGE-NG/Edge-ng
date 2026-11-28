@@ -58,6 +58,17 @@ on conflict (provider, model) do update
       note = excluded.note, updated_at = now();
 ```
 
+## What `0008_market_cache.sql` adds
+
+For keyed market data (Twelve Data), shared by every server (`web/lib/market-cache.ts`). Public market data only, no user data; server only (row-level security on, no policies, functions not callable by browsers).
+
+- `market_cache`: the latest candles per instrument and timeframe, plus which server is refreshing them right now.
+- `market_budget`: per provider, the next free request slot and today's count.
+- `market_claim(key, hold_ms)`: lets one server at a time refresh a key.
+- `market_reserve(provider, spacing_ms, max_wait_ms, per_day)`: spaces requests evenly and counts only the ones that go out.
+
+**Apply it before deploying the web code that uses it**; until then, candles are fetched directly as before.
+
 ## How to apply
 
 1. Supabase dashboard → **SQL Editor** → **New query**.

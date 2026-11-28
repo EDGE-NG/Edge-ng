@@ -125,7 +125,7 @@ export async function watchTrades(opts: { userId?: string; budgetMs: number; not
     };
     try {
       const tf = watchTimeframe(trade.placedAt, nowSec);
-      const hit = findLevelHit(trade, await getCandles(inst, tf, WATCH_CANDLES), tf);
+      const hit = findLevelHit(trade, await getCandles(inst, tf, WATCH_CANDLES, { allowStale: true }), tf);
       if (!hit) {
         results.push({ tradeId: r.id, hit: null });
         continue;

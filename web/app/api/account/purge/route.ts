@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { purgeDueAccounts } from "@/lib/account-deletion";
 import { purgeOldAuditLog } from "@/lib/audit-retention";
 import { cleanupOldFrames } from "@/lib/frame-cleanup";
+import { purgeOldMarketCache } from "@/lib/market-cache";
 import { purgeExpiredLimits } from "@/lib/rate-limit";
 
 /**
@@ -11,8 +12,9 @@ import { purgeExpiredLimits } from "@/lib/rate-limit";
  * It deletes every account whose 14-day grace period has ended: files first,
  * then the account and all its data. It also deletes old chart pictures
  * (lib/frame-cleanup.ts), clears expired rate-limit rows (lib/rate-limit.ts)
- * and deletes audit log rows older than 24 months (lib/audit-retention.ts),
- * so no second scheduler job is needed. Not for browsers.
+ * deletes audit log rows older than 24 months (lib/audit-retention.ts) and
+ * market data nobody asked for in a day (lib/market-cache.ts), so no second
+ * scheduler job is needed. Not for browsers.
  */
 export const maxDuration = 60;
 
@@ -46,7 +48,13 @@ async function run(req: Request) {
   } catch (err) {
     console.error("[account/purge] audit log cleanup failed:", err);
   }
-  return NextResponse.json({ ...accounts, frames, rateLimitsCleared: rateLimits, auditRowsDeleted });
+  let marketCacheCleared: number | null = null;
+  try {
+    marketCacheCleared = await purgeOldMarketCache();
+  } catch (err) {
+    console.error("[account/purge] market cache cleanup failed:", err);
+  }
+  return NextResponse.json({ ...accounts, frames, rateLimitsCleared: rateLimits, auditRowsDeleted, marketCacheCleared });
 }
 
 export const GET = run;
